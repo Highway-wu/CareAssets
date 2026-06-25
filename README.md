@@ -1,5 +1,9 @@
 # CareAssets
 
+<img align="right" width="360" src="docs/careassets-install-finder.png" alt="双击 CareAssets.app 打开应用">
+
+如果你是普通用户，不需要构建项目，下载后直接双击根目录里的 `CareAssets.app` 即可打开；想长期使用可以把它拖到 macOS 的“应用程序”文件夹里。
+
 CareAssets 是一个轻巧的 macOS 状态栏资产追踪工具。它把你关心的币、美股、港股、A 股和黄金收进菜单栏，平时只占很小一块状态栏空间，点开后可以搜索、添加、排序、选择展示项。
 
 ![CareAssets screenshot](docs/careassets-screenshot.jpg)
@@ -31,8 +35,6 @@ CareAssets 当前支持：
 
 - macOS 12.0 或更高版本
 - Xcode Command Line Tools
-
-如果你是普通用户，不需要构建项目，下载后直接双击根目录里的 `CareAssets.app` 即可打开；想长期使用可以把它拖到 macOS 的“应用程序”文件夹里。
 
 ## 构建
 
