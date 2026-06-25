@@ -32,11 +32,13 @@ CareAssets 当前支持：
 - macOS 12.0 或更高版本
 - Xcode Command Line Tools
 
+如果你是普通用户，不需要构建项目，下载后直接双击根目录里的 `CareAssets.app` 即可打开；想长期使用可以把它拖到 macOS 的“应用程序”文件夹里。
+
+## 构建
+
 ```bash
 xcode-select --install
 ```
-
-## 构建
 
 ```bash
 cd CareAssets
@@ -118,11 +120,13 @@ Data sources are public endpoints and may change or rate-limit without notice. C
 - macOS 12.0 or later
 - Xcode Command Line Tools
 
+If you are not a developer, you do not need to build the project: download it, double-click `CareAssets.app` in the project root, and drag it into Applications if you want to keep it installed.
+
+## Build
+
 ```bash
 xcode-select --install
 ```
-
-## Build
 
 ```bash
 cd CareAssets
