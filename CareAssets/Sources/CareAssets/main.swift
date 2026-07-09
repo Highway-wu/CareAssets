@@ -2004,6 +2004,11 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         var pinnedToBottom = false
     }
 
+    private enum SearchListItem {
+        case group(String)
+        case result(AssetSearchResult)
+    }
+
     var onSearchStocks: ((String) -> Void)?
     var onAddStock: ((AssetSearchResult) -> Void)?
     var onToggleVisible: ((String, Bool) -> Void)?
@@ -2042,6 +2047,9 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     private var contentWidth: CGFloat { panelWidth - 36 }
     private var scrollWidth: CGFloat { isRTL ? contentWidth : contentWidth + horizontalInset }
     private let assetRowHeight: CGFloat = 52
+    private let searchGroupHeaderHeight: CGFloat = 24
+    private let searchExpandedMinListHeight: CGFloat = 260
+    private let searchExpandedMaxListHeight: CGFloat = 420
     private let listRowGap: CGFloat = 8
     private let headerHeight: CGFloat = 30
     private let footerHeight: CGFloat = 30
@@ -2147,6 +2155,9 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
 
     private var currentListHeight: CGFloat {
         if isSearchOpen {
+            if hasSearchResults {
+                return min(max(searchDocumentHeight, searchExpandedMinListHeight), searchExpandedMaxListHeight)
+            }
             return searchModeListHeight ?? (assetListHeight + footerHeight + stackSpacing)
         }
         return assetListHeight
@@ -2161,7 +2172,38 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         if isSearching || searchMessage != nil || searchResults.isEmpty {
             return 1
         }
-        return searchResults.count
+        return searchListItems.count
+    }
+
+    private var hasSearchResults: Bool {
+        !isSearching && searchMessage == nil && !searchResults.isEmpty
+    }
+
+    private var searchListItems: [SearchListItem] {
+        var groups: [(String, [AssetSearchResult])] = []
+
+        for result in searchResults {
+            let title = searchGroupTitle(for: result)
+            if let index = groups.firstIndex(where: { $0.0 == title }) {
+                groups[index].1.append(result)
+            } else {
+                groups.append((title, [result]))
+            }
+        }
+
+        return groups.flatMap { title, results in
+            [SearchListItem.group(title)] + results.map(SearchListItem.result)
+        }
+    }
+
+    private var searchDocumentHeight: CGFloat {
+        let items = searchListItems
+        guard !items.isEmpty else { return 0 }
+
+        let itemHeight = items.reduce(CGFloat(0)) { total, item in
+            total + searchListItemHeight(item)
+        }
+        return itemHeight + CGFloat(max(items.count - 1, 0)) * listRowGap
     }
 
     private var isRTL: Bool {
@@ -2413,7 +2455,9 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
 
     private func makeSearchList() -> NSView {
         let rowCount = searchResultRowCount
-        let rowDocumentHeight = CGFloat(rowCount) * assetRowHeight + CGFloat(max(rowCount - 1, 0)) * listRowGap
+        let rowDocumentHeight = hasSearchResults
+            ? searchDocumentHeight
+            : CGFloat(rowCount) * assetRowHeight + CGFloat(max(rowCount - 1, 0)) * listRowGap
         let listHeight = currentListHeight
         let documentHeight = max(rowDocumentHeight, listHeight)
 
@@ -2448,8 +2492,13 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         } else if searchResults.isEmpty {
             stack.addArrangedSubview(makeSearchMessageRow(L10n.emptySearchPrompt))
         } else {
-            for result in searchResults {
-                stack.addArrangedSubview(makeSearchResultRow(result))
+            for item in searchListItems {
+                switch item {
+                case let .group(title):
+                    stack.addArrangedSubview(makeSearchGroupHeader(title))
+                case let .result(result):
+                    stack.addArrangedSubview(makeSearchResultRow(result))
+                }
             }
         }
 
@@ -2473,6 +2522,24 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
             label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             label.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 16),
             label.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -16)
+        ])
+
+        return container
+    }
+
+    private func makeSearchGroupHeader(_ title: String) -> NSView {
+        let container = NSView()
+        container.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+        container.heightAnchor.constraint(equalToConstant: searchGroupHeaderHeight).isActive = true
+
+        let label = makeLabel(title, font: appFont(ofSize: 11, weight: .semibold), color: NSColor.white.withAlphaComponent(0.62), alignment: leadingTextAlignment)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: isRTL ? 0 : 26),
+            label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: isRTL ? -26 : 0),
+            label.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -2)
         ])
 
         return container
@@ -2517,6 +2584,36 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         addArrangedSubviews([checkSpace, left, spacer, detail, add], to: row)
 
         return row
+    }
+
+    private func searchListItemHeight(_ item: SearchListItem) -> CGFloat {
+        switch item {
+        case .group:
+            return searchGroupHeaderHeight
+        case .result:
+            return assetRowHeight
+        }
+    }
+
+    private func searchGroupTitle(for result: AssetSearchResult) -> String {
+        switch result.type {
+        case .crypto:
+            return L10n.text("币", "Crypto", zhHant: "幣", ja: "暗号資産", ar: "عملات", de: "Krypto", fr: "Crypto", ko: "코인", ptPT: "Cripto", es: "Cripto")
+        case .gold:
+            return L10n.gold
+        case .stock:
+            let canonical = (result.canonicalSymbol ?? canonicalAssetSymbol(type: result.type, symbol: result.symbol)).uppercased()
+            if canonical.hasPrefix("HK:") {
+                return L10n.text("港股", "Hong Kong", zhHant: "港股", ja: "香港株", ar: "هونغ كونغ", de: "Hongkong", fr: "Hong Kong", ko: "홍콩", ptPT: "Hong Kong", es: "Hong Kong")
+            }
+            if canonical.hasPrefix("US:") {
+                return L10n.text("美股", "US", zhHant: "美股", ja: "米国株", ar: "الولايات المتحدة", de: "USA", fr: "États-Unis", ko: "미국", ptPT: "EUA", es: "EE. UU.")
+            }
+            if canonical.hasPrefix("SH:") || canonical.hasPrefix("SZ:") {
+                return L10n.text("A 股", "A-shares", zhHant: "A 股", ja: "A株", ar: "أسهم A", de: "A-Aktien", fr: "Actions A", ko: "A주", ptPT: "A-shares", es: "Acciones A")
+            }
+            return result.source
+        }
     }
 
     private func makeSettingsMenu() -> NSMenu {
