@@ -164,6 +164,9 @@ enum L10n {
     static var settings: String { text("设置", "Settings", zhHant: "設定", ja: "設定", ar: "الإعدادات", de: "Einstellungen", fr: "Réglages", ko: "설정", ptPT: "Definições", es: "Ajustes") }
     static var colorSetting: String { text("价格颜色", "Price color", zhHant: "價格顏色", ja: "価格色", ar: "لون السعر", de: "Preisfarbe", fr: "Couleur prix", ko: "가격 색상", ptPT: "Cor preço", es: "Color precio") }
     static var languageSetting: String { text("语言", "Language", zhHant: "語言", ja: "言語", ar: "اللغة", de: "Sprache", fr: "Langue", ko: "언어", ptPT: "Idioma", es: "Idioma") }
+    static var stockDataSourceSetting: String { text("股票数据源", "Stock data source", zhHant: "股票資料源", ja: "株価データ元", ar: "مصدر بيانات الأسهم", de: "Aktien-Datenquelle", fr: "Source actions", ko: "주식 데이터 소스", ptPT: "Fonte de ações", es: "Fuente acciones") }
+    static var chineseStockDataSource: String { text("中文源（东方财富/腾讯）", "Chinese source (Eastmoney/Tencent)", zhHant: "中文源（東方財富/騰訊）", ja: "中国語ソース", ar: "مصدر صيني", de: "Chinesische Quelle", fr: "Source chinoise", ko: "중국어 소스", ptPT: "Fonte chinesa", es: "Fuente china") }
+    static var yahooStockDataSource: String { "Yahoo Finance" }
     static var statusBarBackgroundSetting: String { text("标题颜色", "Title color", zhHant: "標題顏色", ja: "タイトル色", ar: "لون العنوان", de: "Titelfarbe", fr: "Couleur titre", ko: "제목 색상", ptPT: "Cor título", es: "Color título") }
     static var darkStatusBarBackground: String { text("资产标题-白", "Asset title - white", zhHant: "資產標題-白", ja: "資産名 - 白", ar: "عنوان الأصل - أبيض", de: "Titel - Weiß", fr: "Titre - blanc", ko: "자산 제목 - 흰색", ptPT: "Título - branco", es: "Título - blanco") }
     static var lightStatusBarBackground: String { text("资产标题-黑", "Asset title - black", zhHant: "資產標題-黑", ja: "資産名 - 黒", ar: "عنوان الأصل - أسود", de: "Titel - Schwarz", fr: "Titre - noir", ko: "자산 제목 - 검정", ptPT: "Título - preto", es: "Título - negro") }
@@ -258,10 +261,34 @@ enum StatusBarBackgroundMode: String, Codable, Sendable, CaseIterable {
     }
 }
 
+enum StockDataSource: String, Codable, Sendable, CaseIterable {
+    case chinesePublic
+    case yahooFinance
+
+    var title: String {
+        switch self {
+        case .chinesePublic:
+            return L10n.chineseStockDataSource
+        case .yahooFinance:
+            return L10n.yahooStockDataSource
+        }
+    }
+
+    var sourceTitle: String {
+        switch self {
+        case .chinesePublic:
+            return "腾讯行情"
+        case .yahooFinance:
+            return "Yahoo Finance"
+        }
+    }
+}
+
 struct TrackedAsset: Codable, Sendable {
     var type: AssetType
     var name: String
     var symbol: String
+    var canonicalSymbol: String?
     var visibleInMenuBar: Bool
 }
 
@@ -271,6 +298,7 @@ struct AppConfig: Codable, Sendable {
     var stockDisplayCurrency: String
     var priceColorMode: PriceColorMode
     var statusBarBackgroundMode: StatusBarBackgroundMode
+    var stockDataSource: StockDataSource
     var language: AppLanguage
     var assets: [TrackedAsset]
 
@@ -280,11 +308,12 @@ struct AppConfig: Codable, Sendable {
         stockDisplayCurrency: "CNY",
         priceColorMode: .redFallGreenRise,
         statusBarBackgroundMode: .dark,
+        stockDataSource: .chinesePublic,
         language: .system,
         assets: [
-            TrackedAsset(type: .gold, name: L10n.gold, symbol: "JD_GOLD", visibleInMenuBar: true),
-            TrackedAsset(type: .crypto, name: "BTC", symbol: "BTCUSDT", visibleInMenuBar: true),
-            TrackedAsset(type: .crypto, name: "ETH", symbol: "ETHUSDT", visibleInMenuBar: true),
+            TrackedAsset(type: .gold, name: L10n.gold, symbol: "JD_GOLD", canonicalSymbol: "GOLD:JD_GOLD", visibleInMenuBar: true),
+            TrackedAsset(type: .crypto, name: "BTC", symbol: "BTCUSDT", canonicalSymbol: "CRYPTO:BTC", visibleInMenuBar: true),
+            TrackedAsset(type: .crypto, name: "ETH", symbol: "ETHUSDT", canonicalSymbol: "CRYPTO:ETH", visibleInMenuBar: true),
         ]
     )
 
@@ -294,6 +323,7 @@ struct AppConfig: Codable, Sendable {
         stockDisplayCurrency: String,
         priceColorMode: PriceColorMode = .redFallGreenRise,
         statusBarBackgroundMode: StatusBarBackgroundMode = .dark,
+        stockDataSource: StockDataSource = .chinesePublic,
         language: AppLanguage = .system,
         assets: [TrackedAsset]
     ) {
@@ -302,6 +332,7 @@ struct AppConfig: Codable, Sendable {
         self.stockDisplayCurrency = stockDisplayCurrency
         self.priceColorMode = priceColorMode
         self.statusBarBackgroundMode = statusBarBackgroundMode
+        self.stockDataSource = stockDataSource
         self.language = language
         self.assets = assets
     }
@@ -312,6 +343,7 @@ struct AppConfig: Codable, Sendable {
         case stockDisplayCurrency
         case priceColorMode
         case statusBarBackgroundMode
+        case stockDataSource
         case language
         case assets
     }
@@ -323,6 +355,7 @@ struct AppConfig: Codable, Sendable {
         stockDisplayCurrency = try container.decode(String.self, forKey: .stockDisplayCurrency)
         priceColorMode = try container.decodeIfPresent(PriceColorMode.self, forKey: .priceColorMode) ?? .redFallGreenRise
         statusBarBackgroundMode = try container.decodeIfPresent(StatusBarBackgroundMode.self, forKey: .statusBarBackgroundMode) ?? .dark
+        stockDataSource = try container.decodeIfPresent(StockDataSource.self, forKey: .stockDataSource) ?? .chinesePublic
         language = try container.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .system
         assets = try container.decode([TrackedAsset].self, forKey: .assets)
     }
@@ -333,6 +366,7 @@ struct DisplayAsset: Sendable {
     var type: AssetType
     var name: String
     var symbol: String
+    var canonicalSymbol: String?
     var source: String
     var menuPriceText: String
     var priceText: String
@@ -345,10 +379,11 @@ struct DisplayAsset: Sendable {
 
     static func loading(from asset: TrackedAsset) -> DisplayAsset {
         DisplayAsset(
-            id: "\(asset.type.rawValue)-\(asset.symbol)",
+            id: assetIdentity(for: asset),
             type: asset.type,
             name: asset.name,
             symbol: asset.symbol,
+            canonicalSymbol: asset.canonicalSymbol,
             source: "Loading",
             menuPriceText: "--",
             priceText: "--",
@@ -366,15 +401,65 @@ struct AssetSearchResult: Sendable, Equatable {
     var type: AssetType
     var name: String
     var symbol: String
+    var canonicalSymbol: String?
     var source: String
 
     var id: String {
-        "\(type.rawValue)-\(symbol.uppercased())"
+        assetIdentity(type: type, symbol: symbol, canonicalSymbol: canonicalSymbol)
     }
 
     var trackedAsset: TrackedAsset {
-        TrackedAsset(type: type, name: name, symbol: symbol.uppercased(), visibleInMenuBar: false)
+        TrackedAsset(type: type, name: name, symbol: symbol.uppercased(), canonicalSymbol: canonicalSymbol ?? canonicalAssetSymbol(type: type, symbol: symbol), visibleInMenuBar: false)
     }
+}
+
+private func assetIdentity(for asset: TrackedAsset) -> String {
+    assetIdentity(type: asset.type, symbol: asset.symbol, canonicalSymbol: asset.canonicalSymbol)
+}
+
+private func assetIdentity(type: AssetType, symbol: String, canonicalSymbol: String?) -> String {
+    "\(type.rawValue)-\((canonicalSymbol ?? canonicalAssetSymbol(type: type, symbol: symbol)).uppercased())"
+}
+
+private func canonicalAssetSymbol(type: AssetType, symbol: String) -> String {
+    let uppercased = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    switch type {
+    case .gold:
+        return "GOLD:\(uppercased)"
+    case .crypto:
+        return "CRYPTO:\(cryptoBaseSymbol(from: uppercased))"
+    case .stock:
+        return canonicalStockSymbol(from: uppercased)
+    }
+}
+
+private func canonicalStockSymbol(from symbol: String) -> String {
+    let uppercased = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    if uppercased.hasSuffix(".HK") {
+        let code = uppercased.replacingOccurrences(of: ".HK", with: "")
+        return "HK:\(paddedHongKongCode(code))"
+    }
+    if uppercased.hasSuffix(".SS") {
+        return "SH:\(uppercased.replacingOccurrences(of: ".SS", with: ""))"
+    }
+    if uppercased.hasSuffix(".SZ") {
+        return "SZ:\(uppercased.replacingOccurrences(of: ".SZ", with: ""))"
+    }
+    if uppercased.range(of: #"^\d{5}$"#, options: .regularExpression) != nil {
+        return "HK:\(uppercased)"
+    }
+    if uppercased.range(of: #"^\d{6}$"#, options: .regularExpression) != nil {
+        if uppercased.hasPrefix("6") {
+            return "SH:\(uppercased)"
+        }
+        return "SZ:\(uppercased)"
+    }
+    return "US:\(uppercased)"
+}
+
+private func paddedHongKongCode(_ code: String) -> String {
+    guard let number = Int(code) else { return code.uppercased() }
+    return String(format: "%05d", number)
 }
 
 final class ConfigStore {
@@ -411,6 +496,11 @@ final class ConfigStore {
         for index in config.assets.indices {
             if config.assets[index].symbol == "2015.HK", config.assets[index].name == "理想" {
                 config.assets[index].name = "理想汽车"
+                changed = true
+            }
+            let canonical = canonicalAssetSymbol(type: config.assets[index].type, symbol: config.assets[index].symbol)
+            if config.assets[index].canonicalSymbol?.isEmpty != false {
+                config.assets[index].canonicalSymbol = canonical
                 changed = true
             }
         }
@@ -474,7 +564,7 @@ final class AssetService {
 
         let stockAssets = config.assets.filter { $0.type == .stock }
         if !stockAssets.isEmpty {
-            let fetched = await fetchStockAssets(stockAssets)
+            let fetched = await fetchStockAssets(stockAssets, dataSource: config.stockDataSource)
             for (key, value) in fetched {
                 results[key] = value
             }
@@ -486,7 +576,7 @@ final class AssetService {
     }
 
     private func key(for asset: TrackedAsset) -> String {
-        "\(asset.type.rawValue)-\(asset.symbol)"
+        assetIdentity(for: asset)
     }
 
     private func requestData(from url: URL) async throws -> Data {
@@ -632,6 +722,7 @@ extension AssetService {
                 type: .gold,
                 name: asset.name,
                 symbol: asset.symbol,
+                canonicalSymbol: asset.canonicalSymbol,
                 source: "K780",
                 menuPriceText: formatStatusNumber(price, minFraction: 0, maxFraction: 0),
                 priceText: "\(formatCNY(price, compact: false))\(L10n.gramSuffix)",
@@ -696,6 +787,7 @@ extension AssetService {
                 type: .gold,
                 name: asset.name,
                 symbol: asset.symbol,
+                canonicalSymbol: asset.canonicalSymbol,
                 source: "Yahoo Finance",
                 menuPriceText: formatStatusNumber(price, minFraction: 0, maxFraction: 0),
                 priceText: "\(formatCNY(price, compact: false))\(L10n.gramSuffix)",
@@ -737,6 +829,7 @@ extension AssetService {
                 type: .gold,
                 name: asset.name,
                 symbol: asset.symbol,
+                canonicalSymbol: asset.canonicalSymbol,
                 source: "Yahoo Finance",
                 menuPriceText: formatStatusNumber(price, minFraction: 0, maxFraction: 0),
                 priceText: "\(formatCurrency(price, currencyCode: currency, compact: false))\(L10n.ounceSuffix)",
@@ -817,6 +910,7 @@ extension AssetService {
                 type: .crypto,
                 name: asset.name,
                 symbol: asset.symbol,
+                canonicalSymbol: asset.canonicalSymbol,
                 source: "Coinbase",
                 menuPriceText: formatStatusNumber(price, minFraction: 0, maxFraction: 0),
                 priceText: "\(formatNumber(price, minFraction: 2, maxFraction: 2)) \(quoteCurrency)",
@@ -904,12 +998,49 @@ private struct AlphaVantageMatch: Decodable {
     }
 }
 
+private struct EastMoneySearchResponse: Decodable {
+    var quotationCodeTable: EastMoneyQuotationCodeTable?
+
+    enum CodingKeys: String, CodingKey {
+        case quotationCodeTable = "QuotationCodeTable"
+    }
+}
+
+private struct EastMoneyQuotationCodeTable: Decodable {
+    var data: [EastMoneySearchItem]?
+
+    enum CodingKeys: String, CodingKey {
+        case data = "Data"
+    }
+}
+
+private struct EastMoneySearchItem: Decodable {
+    var code: String?
+    var name: String?
+    var pinyin: String?
+    var exchange: String?
+    var classify: String?
+    var securityTypeName: String?
+    var quoteID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case code = "Code"
+        case name = "Name"
+        case pinyin = "PinYin"
+        case exchange = "JYS"
+        case classify = "Classify"
+        case securityTypeName = "SecurityTypeName"
+        case quoteID = "QuoteID"
+    }
+}
+
 private struct RawStockQuote {
     var asset: TrackedAsset
     var price: Double
     var previousClose: Double?
     var currency: String
     var displayName: String
+    var source: String
     var updatedAt: Date?
 }
 
@@ -920,7 +1051,7 @@ private struct FXQuote {
 }
 
 extension AssetService {
-    func searchAssets(query: String) async throws -> [AssetSearchResult] {
+    func searchAssets(query: String, stockDataSource: StockDataSource) async throws -> [AssetSearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
@@ -928,15 +1059,24 @@ extension AssetService {
         var cryptoResults: [AssetSearchResult] = []
         var firstError: Error?
 
-        do {
-            stockResults.append(contentsOf: try await searchYahooStocks(query: trimmed))
-        } catch {
-            firstError = error
-        }
+        switch stockDataSource {
+        case .chinesePublic:
+            do {
+                stockResults.append(contentsOf: try await searchEastMoneyStocks(query: trimmed))
+            } catch {
+                firstError = error
+            }
+        case .yahooFinance:
+            do {
+                stockResults.append(contentsOf: try await searchYahooStocks(query: trimmed))
+            } catch {
+                firstError = error
+            }
 
-        if stockResults.isEmpty {
-            if let fallback = try? await searchAlphaVantageStocks(query: trimmed) {
-                stockResults.append(contentsOf: fallback)
+            if stockResults.isEmpty {
+                if let fallback = try? await searchAlphaVantageStocks(query: trimmed) {
+                    stockResults.append(contentsOf: fallback)
+                }
             }
         }
 
@@ -955,15 +1095,15 @@ extension AssetService {
         return Array(uniqueResults.prefix(12))
     }
 
-    private func fetchStockAssets(_ assets: [TrackedAsset]) async -> [String: DisplayAsset] {
+    private func fetchStockAssets(_ assets: [TrackedAsset], dataSource: StockDataSource) async -> [String: DisplayAsset] {
         var rawQuotes: [RawStockQuote] = []
         var output: [String: DisplayAsset] = [:]
 
         for asset in assets {
             do {
-                rawQuotes.append(try await fetchStockQuote(asset))
+                rawQuotes.append(try await fetchStockQuote(asset, dataSource: dataSource))
             } catch {
-                output[key(for: asset)] = errorAsset(asset, source: "Yahoo Finance", message: error.localizedDescription)
+                output[key(for: asset)] = errorAsset(asset, source: dataSource.sourceTitle, message: error.localizedDescription)
             }
         }
 
@@ -977,9 +1117,10 @@ extension AssetService {
             output[key(for: quote.asset)] = DisplayAsset(
                 id: key(for: quote.asset),
                 type: .stock,
-                name: quote.asset.name,
+                name: quote.displayName,
                 symbol: quote.asset.symbol,
-                source: "Yahoo Finance",
+                canonicalSymbol: quote.asset.canonicalSymbol,
+                source: quote.source,
                 menuPriceText: formatStatusNumber(quote.price, minFraction: 2, maxFraction: 2),
                 priceText: "\(formatCurrency(quote.price, currencyCode: quote.currency, compact: false)) \(quote.currency)",
                 detailText: quote.asset.symbol,
@@ -994,19 +1135,90 @@ extension AssetService {
         return output
     }
 
-    private func searchYahooStocks(query: String) async throws -> [AssetSearchResult] {
-        var components = URLComponents(string: "https://query1.finance.yahoo.com/v1/finance/search")!
+    private func searchEastMoneyStocks(query: String) async throws -> [AssetSearchResult] {
+        var components = URLComponents(string: "https://searchapi.eastmoney.com/api/suggest/get")!
         components.queryItems = [
-            URLQueryItem(name: "q", value: query),
-            URLQueryItem(name: "quotesCount", value: "12"),
-            URLQueryItem(name: "newsCount", value: "0")
+            URLQueryItem(name: "input", value: query),
+            URLQueryItem(name: "type", value: "14"),
+            URLQueryItem(name: "token", value: "D43BF722C8E33BDC906FB84D85E326E8"),
+            URLQueryItem(name: "count", value: "12")
         ]
 
         guard let url = components.url else { return [] }
         let data = try await requestData(from: url)
-        let response = try JSONDecoder().decode(YahooSearchResponse.self, from: data)
+        let response = try JSONDecoder().decode(EastMoneySearchResponse.self, from: data)
 
-        return (response.quotes ?? []).compactMap { quote in
+        return (response.quotationCodeTable?.data ?? []).compactMap { item in
+            guard let code = item.code?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let name = item.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !code.isEmpty,
+                  !name.isEmpty,
+                  let canonical = eastMoneyCanonicalSymbol(for: item) else {
+                return nil
+            }
+
+            let source = item.securityTypeName ?? item.exchange ?? "东方财富"
+            return AssetSearchResult(type: .stock, name: name, symbol: code.uppercased(), canonicalSymbol: canonical, source: source)
+        }
+    }
+
+    private func searchYahooStocks(query: String) async throws -> [AssetSearchResult] {
+        var output: [AssetSearchResult] = []
+        var firstError: Error?
+
+        for searchQuery in stockSearchQueries(for: query) {
+            var components = URLComponents(string: "https://query1.finance.yahoo.com/v1/finance/search")!
+            components.queryItems = [
+                URLQueryItem(name: "q", value: searchQuery),
+                URLQueryItem(name: "quotesCount", value: "12"),
+                URLQueryItem(name: "newsCount", value: "0")
+            ]
+
+            guard let url = components.url else { continue }
+
+            do {
+                let data = try await requestData(from: url)
+                let response = try JSONDecoder().decode(YahooSearchResponse.self, from: data)
+                output.append(contentsOf: yahooStockResults(from: response))
+            } catch {
+                if firstError == nil {
+                    firstError = error
+                }
+            }
+        }
+
+        let unique = uniqueAssetSearchResults(output)
+        if unique.isEmpty, let firstError {
+            throw firstError
+        }
+        return unique
+    }
+
+    private func stockSearchQueries(for query: String) -> [String] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        var queries = [trimmed]
+        let uppercased = trimmed.uppercased()
+
+        if uppercased.range(of: #"^\d{4,5}$"#, options: .regularExpression) != nil {
+            queries.append("\(uppercased).HK")
+            if let number = Int(uppercased) {
+                queries.append("\(number).HK")
+            }
+        }
+
+        var seen: Set<String> = []
+        return queries.filter { query in
+            let key = query.uppercased()
+            guard !seen.contains(key) else { return false }
+            seen.insert(key)
+            return true
+        }
+    }
+
+    private func yahooStockResults(from response: YahooSearchResponse) -> [AssetSearchResult] {
+        (response.quotes ?? []).compactMap { quote in
             guard let symbol = quote.symbol?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !symbol.isEmpty else { return nil }
 
@@ -1017,7 +1229,7 @@ extension AssetService {
 
             let name = quote.shortname ?? quote.longname ?? symbol
             let exchange = quote.exchDisp ?? quote.exchange ?? "Yahoo"
-            return AssetSearchResult(type: .stock, name: name, symbol: symbol.uppercased(), source: exchange)
+            return AssetSearchResult(type: .stock, name: name, symbol: symbol.uppercased(), canonicalSymbol: canonicalAssetSymbol(type: .stock, symbol: symbol), source: exchange)
         }
     }
 
@@ -1044,7 +1256,7 @@ extension AssetService {
                 return nil
             }
 
-            return AssetSearchResult(type: .stock, name: name, symbol: symbol.uppercased(), source: match.region ?? "Alpha Vantage")
+            return AssetSearchResult(type: .stock, name: name, symbol: symbol.uppercased(), canonicalSymbol: canonicalAssetSymbol(type: .stock, symbol: symbol), source: match.region ?? "Alpha Vantage")
         }
     }
 
@@ -1074,6 +1286,7 @@ extension AssetService {
                 type: .crypto,
                 name: cryptoDisplayName(for: base),
                 symbol: symbol,
+                canonicalSymbol: "CRYPTO:\(base)",
                 source: "Coinbase"
             )
             return (result, priority)
@@ -1204,8 +1417,18 @@ extension AssetService {
         return uppercased
     }
 
-    private func fetchStockQuote(_ asset: TrackedAsset) async throws -> RawStockQuote {
-        let encodedSymbol = asset.symbol.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? asset.symbol
+    private func fetchStockQuote(_ asset: TrackedAsset, dataSource: StockDataSource) async throws -> RawStockQuote {
+        switch dataSource {
+        case .chinesePublic:
+            return try await fetchTencentStockQuote(asset)
+        case .yahooFinance:
+            return try await fetchYahooStockQuote(asset)
+        }
+    }
+
+    private func fetchYahooStockQuote(_ asset: TrackedAsset) async throws -> RawStockQuote {
+        let yahooSymbol = yahooStockSymbol(for: asset)
+        let encodedSymbol = yahooSymbol.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? yahooSymbol
         let url = URL(string: "https://query1.finance.yahoo.com/v8/finance/chart/\(encodedSymbol)?range=5d&interval=1d")!
         let data = try await requestData(from: url)
         let response = try JSONDecoder().decode(YahooChartResponse.self, from: data)
@@ -1222,8 +1445,59 @@ extension AssetService {
             previousClose: meta.chartPreviousClose,
             currency: currency.uppercased(),
             displayName: meta.shortName ?? meta.longName ?? asset.name,
+            source: "Yahoo Finance",
             updatedAt: meta.regularMarketTime.map { Date(timeIntervalSince1970: TimeInterval($0)) }
         )
+    }
+
+    private func fetchTencentStockQuote(_ asset: TrackedAsset) async throws -> RawStockQuote {
+        guard let symbol = tencentStockSymbol(for: asset) else {
+            throw NSError(domain: "CareAssets.Tencent", code: 1)
+        }
+
+        let url = URL(string: "https://qt.gtimg.cn/q=\(symbol)")!
+        let data = try await requestData(from: url)
+        let responseText = try decodeGB18030(data)
+        let fields = try parseTencentQuoteFields(responseText)
+
+        guard fields.count > 32,
+              let price = Double(fields[3]),
+              price > 0 else {
+            throw NSError(domain: "CareAssets.Tencent", code: 2)
+        }
+
+        let previousClose = Double(fields[4])
+        let currency = stockCurrency(for: asset)
+
+        return RawStockQuote(
+            asset: asset,
+            price: price,
+            previousClose: previousClose,
+            currency: currency,
+            displayName: fields[safe: 1]?.isEmpty == false ? fields[1] : asset.name,
+            source: "腾讯行情",
+            updatedAt: parseTencentDate(fields[safe: 30])
+        )
+    }
+
+    private func parseTencentQuoteFields(_ text: String) throws -> [String] {
+        guard let firstQuote = text.firstIndex(of: "\""),
+              let lastQuote = text.lastIndex(of: "\""),
+              firstQuote < lastQuote else {
+            throw NSError(domain: "CareAssets.Tencent", code: 3)
+        }
+        return String(text[text.index(after: firstQuote)..<lastQuote]).components(separatedBy: "~")
+    }
+
+    private func decodeGB18030(_ data: Data) throws -> String {
+        let encoding = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)))
+        if let text = String(data: data, encoding: encoding) {
+            return text
+        }
+        if let text = String(data: data, encoding: .utf8) {
+            return text
+        }
+        throw NSError(domain: "CareAssets.Encoding", code: 1)
     }
 
     private func fetchFXRate(from sourceCurrency: String, to targetCurrency: String) async throws -> Double {
@@ -1308,7 +1582,10 @@ final class StatusTickerView: NSView {
     }
 
     private func drawTicker(in bounds: NSRect) {
-        guard !items.isEmpty else { return }
+        guard !items.isEmpty else {
+            drawEmptyTicker(in: bounds)
+            return
+        }
 
         let center = NSMutableParagraphStyle()
         center.alignment = .center
@@ -1339,6 +1616,20 @@ final class StatusTickerView: NSView {
                 in: NSRect(x: rect.minX, y: valueY, width: rect.width, height: valueHeight)
             )
         }
+    }
+
+    private func drawEmptyTicker(in bounds: NSRect) {
+        let center = NSMutableParagraphStyle()
+        center.alignment = .center
+
+        drawStatusText(
+            "CA",
+            baseFont: appFont(ofSize: 11.5, weight: .semibold),
+            asciiFont: senFont(ofSize: 11.5),
+            color: NSColor(calibratedRed: 0.22, green: 0.55, blue: 1.0, alpha: 0.95),
+            paragraphStyle: center,
+            in: NSRect(x: 0, y: max(0, (bounds.height - 13) / 2), width: bounds.width, height: 13)
+        )
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -1720,6 +2011,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     var onMoveAsset: ((String, String, Bool) -> Void)?
     var onColorModeChange: ((PriceColorMode) -> Void)?
     var onStatusBarBackgroundModeChange: ((StatusBarBackgroundMode) -> Void)?
+    var onStockDataSourceChange: ((StockDataSource) -> Void)?
     var onLanguageChange: ((AppLanguage) -> Void)?
     var onPreferredContentSizeChange: ((NSSize) -> Void)?
     var onQuit: (() -> Void)?
@@ -1729,6 +2021,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     private var isRefreshing = false
     private var colorMode: PriceColorMode = .white
     private var statusBarBackgroundMode: StatusBarBackgroundMode = .dark
+    private var stockDataSource: StockDataSource = .chinesePublic
     private var language: AppLanguage = .system
     private var isSearchOpen = false
     private var isSearching = false
@@ -1774,12 +2067,13 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         render()
     }
 
-    func update(assets: [DisplayAsset], countdown: Int, isRefreshing: Bool, colorMode: PriceColorMode, statusBarBackgroundMode: StatusBarBackgroundMode, language: AppLanguage) {
+    func update(assets: [DisplayAsset], countdown: Int, isRefreshing: Bool, colorMode: PriceColorMode, statusBarBackgroundMode: StatusBarBackgroundMode, stockDataSource: StockDataSource, language: AppLanguage) {
         self.assets = assets
         self.countdown = countdown
         self.isRefreshing = isRefreshing
         self.colorMode = colorMode
         self.statusBarBackgroundMode = statusBarBackgroundMode
+        self.stockDataSource = stockDataSource
         self.language = language
         if isSearchOpen {
             return
@@ -2212,9 +2506,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         let detail = makeLabel(result.source, font: appFont(ofSize: 11, weight: .medium), color: NSColor.white.withAlphaComponent(0.50), alignment: trailingTextAlignment)
         detail.widthAnchor.constraint(equalToConstant: 82).isActive = true
 
-        let exists = assets.contains { asset in
-            asset.type == result.type && normalizedAssetSymbol(asset.symbol) == normalizedAssetSymbol(result.symbol)
-        }
+        let exists = assets.contains { $0.id == result.id }
         let add = SearchResultActionButton(title: "", target: self, action: #selector(addSearchResultClicked(_:)))
         add.isTracked = exists
         add.isBordered = false
@@ -2232,6 +2524,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         menu.appearance = NSAppearance(named: .darkAqua)
         menu.addItem(makeParentMenuItem(title: L10n.colorSetting, submenu: makeColorModeMenu()))
         menu.addItem(makeParentMenuItem(title: L10n.statusBarBackgroundSetting, submenu: makeStatusBarBackgroundMenu()))
+        menu.addItem(makeParentMenuItem(title: L10n.stockDataSourceSetting, submenu: makeStockDataSourceMenu()))
         menu.addItem(makeParentMenuItem(title: L10n.languageSetting, submenu: makeLanguageMenu()))
         return menu
     }
@@ -2263,6 +2556,19 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
             item.target = self
             item.representedObject = mode.rawValue
             item.state = mode == statusBarBackgroundMode ? .on : .off
+            menu.addItem(item)
+        }
+        return menu
+    }
+
+    private func makeStockDataSourceMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.appearance = NSAppearance(named: .darkAqua)
+        for source in StockDataSource.allCases {
+            let item = NSMenuItem(title: source.title, action: #selector(stockDataSourceMenuItemClicked(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = source.rawValue
+            item.state = source == stockDataSource ? .on : .off
             menu.addItem(item)
         }
         return menu
@@ -2341,6 +2647,14 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
               let mode = StatusBarBackgroundMode(rawValue: rawValue) else { return }
         statusBarBackgroundMode = mode
         onStatusBarBackgroundModeChange?(mode)
+        render()
+    }
+
+    @objc private func stockDataSourceMenuItemClicked(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let source = StockDataSource(rawValue: rawValue) else { return }
+        stockDataSource = source
+        onStockDataSourceChange?(source)
         render()
     }
 
@@ -2525,13 +2839,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     }
 
     private func isSearchResultTracked(_ result: AssetSearchResult) -> Bool {
-        assets.contains { asset in
-            asset.type == result.type && normalizedAssetSymbol(asset.symbol) == normalizedAssetSymbol(result.symbol)
-        }
-    }
-
-    private func normalizedAssetSymbol(_ symbol: String) -> String {
-        symbol.uppercased().replacingOccurrences(of: "-", with: "")
+        assets.contains { $0.id == result.id }
     }
 
     private func makeAssetDetailLabel(_ asset: DisplayAsset, percentText: String, dateText: String?, isError: Bool = false) -> NSTextField {
@@ -2692,6 +3000,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         panelViewController.onStatusBarBackgroundModeChange = { [weak self] mode in
             self?.setStatusBarBackgroundMode(mode)
         }
+        panelViewController.onStockDataSourceChange = { [weak self] source in
+            self?.setStockDataSource(source)
+        }
         panelViewController.onLanguageChange = { [weak self] language in
             self?.setLanguage(language)
         }
@@ -2723,6 +3034,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 isRefreshing: isRefreshing,
                 colorMode: config.priceColorMode,
                 statusBarBackgroundMode: config.statusBarBackgroundMode,
+                stockDataSource: config.stockDataSource,
                 language: config.language
             )
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -2860,6 +3172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             isRefreshing: isRefreshing,
             colorMode: config.priceColorMode,
             statusBarBackgroundMode: config.statusBarBackgroundMode,
+            stockDataSource: config.stockDataSource,
             language: config.language
         )
     }
@@ -2874,7 +3187,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         Task {
             do {
-                let results = try await service.searchAssets(query: query)
+                let results = try await service.searchAssets(query: query, stockDataSource: self.config.stockDataSource)
                 await MainActor.run {
                     guard requestID == self.searchRequestID else { return }
                     let message = results.isEmpty ? L10n.noSearchResults : nil
@@ -2962,6 +3275,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         updateViews()
     }
 
+    private func setStockDataSource(_ source: StockDataSource) {
+        config.stockDataSource = source
+        ConfigStore.write(config)
+        updateViews()
+        refresh()
+    }
+
     private func setLanguage(_ language: AppLanguage) {
         config.language = language
         L10n.appLanguage = language
@@ -2971,7 +3291,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func key(for asset: TrackedAsset) -> String {
-        "\(asset.type.rawValue)-\(asset.symbol)"
+        assetIdentity(for: asset)
     }
 
     private func makeStatusTitle(from assets: [DisplayAsset]) -> String {
@@ -2994,6 +3314,129 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         case .stock:
             return asset.name
         }
+    }
+}
+
+// MARK: - Symbol Mapping
+
+private func eastMoneyCanonicalSymbol(for item: EastMoneySearchItem) -> String? {
+    if let quoteID = item.quoteID?.uppercased() {
+        let parts = quoteID.split(separator: ".", maxSplits: 1).map(String.init)
+        if parts.count == 2 {
+            switch parts[0] {
+            case "116":
+                return "HK:\(paddedHongKongCode(parts[1]))"
+            case "105", "106", "107":
+                return "US:\(parts[1])"
+            case "1":
+                return "SH:\(parts[1])"
+            case "0":
+                return "SZ:\(parts[1])"
+            default:
+                break
+            }
+        }
+    }
+
+    let classify = item.classify?.uppercased() ?? ""
+    let exchange = item.exchange?.uppercased() ?? ""
+    guard let code = item.code?.trimmingCharacters(in: .whitespacesAndNewlines), !code.isEmpty else {
+        return nil
+    }
+    let uppercased = code.uppercased()
+
+    if classify == "HK" || exchange == "HK" {
+        return "HK:\(paddedHongKongCode(uppercased))"
+    }
+    if classify == "USSTOCK" || ["NASDAQ", "NYSE", "AMEX"].contains(exchange) {
+        return "US:\(uppercased)"
+    }
+    if classify == "ASTOCK" || uppercased.range(of: #"^\d{6}$"#, options: .regularExpression) != nil {
+        return uppercased.hasPrefix("6") ? "SH:\(uppercased)" : "SZ:\(uppercased)"
+    }
+    return nil
+}
+
+private func tencentStockSymbol(for asset: TrackedAsset) -> String? {
+    let canonical = (asset.canonicalSymbol ?? canonicalAssetSymbol(type: asset.type, symbol: asset.symbol)).uppercased()
+    let parts = canonical.split(separator: ":", maxSplits: 1).map(String.init)
+    guard parts.count == 2 else { return nil }
+
+    switch parts[0] {
+    case "HK":
+        return "hk\(paddedHongKongCode(parts[1]))"
+    case "US":
+        return "us\(parts[1])"
+    case "SH":
+        return "sh\(parts[1])"
+    case "SZ":
+        return "sz\(parts[1])"
+    default:
+        return nil
+    }
+}
+
+private func yahooStockSymbol(for asset: TrackedAsset) -> String {
+    let canonical = (asset.canonicalSymbol ?? canonicalAssetSymbol(type: asset.type, symbol: asset.symbol)).uppercased()
+    let parts = canonical.split(separator: ":", maxSplits: 1).map(String.init)
+    guard parts.count == 2 else { return asset.symbol }
+
+    switch parts[0] {
+    case "HK":
+        if let number = Int(parts[1]) {
+            return "\(number).HK"
+        }
+        return "\(parts[1]).HK"
+    case "SH":
+        return "\(parts[1]).SS"
+    case "SZ":
+        return "\(parts[1]).SZ"
+    case "US":
+        return parts[1]
+    default:
+        return asset.symbol
+    }
+}
+
+private func stockCurrency(for asset: TrackedAsset) -> String {
+    let canonical = (asset.canonicalSymbol ?? canonicalAssetSymbol(type: asset.type, symbol: asset.symbol)).uppercased()
+    if canonical.hasPrefix("HK:") {
+        return "HKD"
+    }
+    if canonical.hasPrefix("US:") {
+        return "USD"
+    }
+    return "CNY"
+}
+
+private func cryptoBaseSymbol(from symbol: String) -> String {
+    let uppercased = symbol.uppercased()
+    for quote in ["USDT", "USDC", "USD"] {
+        if uppercased.hasSuffix(quote) {
+            return String(uppercased.dropLast(quote.count))
+        }
+    }
+    return uppercased
+}
+
+private func parseTencentDate(_ string: String?) -> Date? {
+    guard let string, !string.isEmpty else { return nil }
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+
+    for format in ["yyyy/MM/dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyyMMddHHmmss"] {
+        formatter.dateFormat = format
+        if let date = formatter.date(from: string) {
+            return date
+        }
+    }
+    return nil
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
 
@@ -3245,10 +3688,11 @@ private func usesSenFont(_ character: Character) -> Bool {
 
 private func errorAsset(_ asset: TrackedAsset, source: String, message: String) -> DisplayAsset {
     DisplayAsset(
-        id: "\(asset.type.rawValue)-\(asset.symbol)",
+        id: assetIdentity(for: asset),
         type: asset.type,
         name: asset.name,
         symbol: asset.symbol,
+        canonicalSymbol: asset.canonicalSymbol,
         source: source,
         menuPriceText: "--",
         priceText: "--",
