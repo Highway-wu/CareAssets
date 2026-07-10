@@ -162,6 +162,8 @@ enum L10n {
     static var remove: String { text("移出", "Remove", zhHant: "移除", ja: "削除", ar: "إزالة", de: "Entfernen", fr: "Retirer", ko: "제거", ptPT: "Remover", es: "Quitar") }
     static var added: String { text("已添加", "Added", zhHant: "已新增", ja: "追加済み", ar: "مُضاف", de: "Hinzugefügt", fr: "Ajouté", ko: "추가됨", ptPT: "Adicionado", es: "Añadido") }
     static var settings: String { text("设置", "Settings", zhHant: "設定", ja: "設定", ar: "الإعدادات", de: "Einstellungen", fr: "Réglages", ko: "설정", ptPT: "Definições", es: "Ajustes") }
+    static var launchAtLogin: String { text("开机启动", "Launch at login", zhHant: "開機啟動", ja: "ログイン時に起動", ar: "التشغيل عند تسجيل الدخول", de: "Beim Anmelden starten", fr: "Lancer à l'ouverture", ko: "로그인 시 실행", ptPT: "Abrir ao iniciar sessão", es: "Abrir al iniciar sesión") }
+    static var launchAtLoginFailed: String { text("开机启动设置失败。", "Failed to update launch at login.", zhHant: "開機啟動設定失敗。") }
     static var edit: String { text("编辑", "Edit", zhHant: "編輯", ja: "編集", ar: "تحرير", de: "Bearbeiten", fr: "Modifier", ko: "편집", ptPT: "Editar", es: "Editar") }
     static var doneEditing: String { text("完成编辑", "Done editing", zhHant: "完成編輯", ja: "編集完了", ar: "إنهاء التحرير", de: "Fertig", fr: "Terminer", ko: "편집 완료", ptPT: "Concluir edição", es: "Terminar edición") }
     static var position: String { text("持仓", "Position", zhHant: "持倉", ja: "保有", ar: "المركز", de: "Position", fr: "Position", ko: "보유", ptPT: "Posição", es: "Posición") }
@@ -176,6 +178,8 @@ enum L10n {
     static var languageSetting: String { text("语言", "Language", zhHant: "語言", ja: "言語", ar: "اللغة", de: "Sprache", fr: "Langue", ko: "언어", ptPT: "Idioma", es: "Idioma") }
     static var stockDataSourceSetting: String { text("股票数据源", "Stock data source", zhHant: "股票資料源", ja: "株価データ元", ar: "مصدر بيانات الأسهم", de: "Aktien-Datenquelle", fr: "Source actions", ko: "주식 데이터 소스", ptPT: "Fonte de ações", es: "Fuente acciones") }
     static var chineseStockDataSource: String { text("中文源（东方财富/腾讯）", "Chinese source (Eastmoney/Tencent)", zhHant: "中文源（東方財富/騰訊）", ja: "中国語ソース", ar: "مصدر صيني", de: "Chinesische Quelle", fr: "Source chinoise", ko: "중국어 소스", ptPT: "Fonte chinesa", es: "Fuente china") }
+    static var eastMoneyStockDataSource: String { text("东方财富", "Eastmoney", zhHant: "東方財富", ja: "Eastmoney", ar: "Eastmoney", de: "Eastmoney", fr: "Eastmoney", ko: "Eastmoney", ptPT: "Eastmoney", es: "Eastmoney") }
+    static var tencentStockDataSource: String { text("腾讯", "Tencent", zhHant: "騰訊", ja: "Tencent", ar: "Tencent", de: "Tencent", fr: "Tencent", ko: "Tencent", ptPT: "Tencent", es: "Tencent") }
     static var yahooStockDataSource: String { "Yahoo Finance" }
     static var statusBarBackgroundSetting: String { text("标题颜色", "Title color", zhHant: "標題顏色", ja: "タイトル色", ar: "لون العنوان", de: "Titelfarbe", fr: "Couleur titre", ko: "제목 색상", ptPT: "Cor título", es: "Color título") }
     static var darkStatusBarBackground: String { text("资产标题-白", "Asset title - white", zhHant: "資產標題-白", ja: "資産名 - 白", ar: "عنوان الأصل - أبيض", de: "Titel - Weiß", fr: "Titre - blanc", ko: "자산 제목 - 흰색", ptPT: "Título - branco", es: "Título - blanco") }
@@ -280,13 +284,16 @@ enum StatusBarBackgroundMode: String, Codable, Sendable, CaseIterable {
 }
 
 enum StockDataSource: String, Codable, Sendable, CaseIterable {
-    case chinesePublic
+    case eastMoney
+    case tencent
     case yahooFinance
 
     var title: String {
         switch self {
-        case .chinesePublic:
-            return L10n.chineseStockDataSource
+        case .eastMoney:
+            return L10n.eastMoneyStockDataSource
+        case .tencent:
+            return L10n.tencentStockDataSource
         case .yahooFinance:
             return L10n.yahooStockDataSource
         }
@@ -294,11 +301,33 @@ enum StockDataSource: String, Codable, Sendable, CaseIterable {
 
     var sourceTitle: String {
         switch self {
-        case .chinesePublic:
+        case .eastMoney:
+            return "东方财富行情"
+        case .tencent:
             return "腾讯行情"
         case .yahooFinance:
             return "Yahoo Finance"
         }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = (try? container.decode(String.self)) ?? Self.tencent.rawValue
+        switch rawValue {
+        case Self.eastMoney.rawValue:
+            self = .eastMoney
+        case Self.tencent.rawValue, "chinesePublic":
+            self = .tencent
+        case Self.yahooFinance.rawValue:
+            self = .yahooFinance
+        default:
+            self = .tencent
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
 
@@ -328,7 +357,7 @@ struct AppConfig: Codable, Sendable {
         stockDisplayCurrency: "CNY",
         priceColorMode: .redFallGreenRise,
         statusBarBackgroundMode: .dark,
-        stockDataSource: .chinesePublic,
+        stockDataSource: .tencent,
         language: .system,
         assets: [
             TrackedAsset(type: .gold, name: L10n.gold, symbol: "JD_GOLD", canonicalSymbol: "GOLD:JD_GOLD", holdingQuantity: nil, averageBuyPrice: nil, visibleInMenuBar: true),
@@ -343,7 +372,7 @@ struct AppConfig: Codable, Sendable {
         stockDisplayCurrency: String,
         priceColorMode: PriceColorMode = .redFallGreenRise,
         statusBarBackgroundMode: StatusBarBackgroundMode = .dark,
-        stockDataSource: StockDataSource = .chinesePublic,
+        stockDataSource: StockDataSource = .tencent,
         language: AppLanguage = .system,
         assets: [TrackedAsset]
     ) {
@@ -375,7 +404,7 @@ struct AppConfig: Codable, Sendable {
         stockDisplayCurrency = try container.decode(String.self, forKey: .stockDisplayCurrency)
         priceColorMode = try container.decodeIfPresent(PriceColorMode.self, forKey: .priceColorMode) ?? .redFallGreenRise
         statusBarBackgroundMode = try container.decodeIfPresent(StatusBarBackgroundMode.self, forKey: .statusBarBackgroundMode) ?? .dark
-        stockDataSource = try container.decodeIfPresent(StockDataSource.self, forKey: .stockDataSource) ?? .chinesePublic
+        stockDataSource = try container.decodeIfPresent(StockDataSource.self, forKey: .stockDataSource) ?? .tencent
         language = try container.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .system
         assets = try container.decode([TrackedAsset].self, forKey: .assets)
     }
@@ -569,6 +598,50 @@ final class ConfigStore {
             try data.write(to: configURL, options: .atomic)
         } catch {
             NSLog("CareAssets config write failed: \(error.localizedDescription)")
+        }
+    }
+}
+
+enum LoginLaunchAgent {
+    private static var label: String {
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.highway.CareAssets.StatusBar"
+        return "\(bundleID).LaunchAtLogin"
+    }
+
+    private static var launchAgentURL: URL {
+        let directory = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("LaunchAgents", isDirectory: true)
+        return directory.appendingPathComponent("\(label).plist")
+    }
+
+    static var isEnabled: Bool {
+        guard let plist = NSDictionary(contentsOf: launchAgentURL),
+              let arguments = plist["ProgramArguments"] as? [String] else {
+            return false
+        }
+        return arguments.contains(Bundle.main.bundleURL.path)
+    }
+
+    static func setEnabled(_ enabled: Bool) throws {
+        let fileManager = FileManager.default
+        let url = launchAgentURL
+
+        if enabled {
+            try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let plist: [String: Any] = [
+                "Label": label,
+                "ProgramArguments": [
+                    "/usr/bin/open",
+                    "-g",
+                    Bundle.main.bundleURL.path
+                ],
+                "RunAtLoad": true
+            ]
+            let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+            try data.write(to: url, options: .atomic)
+        } else if fileManager.fileExists(atPath: url.path) {
+            try fileManager.removeItem(at: url)
         }
     }
 }
@@ -1098,6 +1171,34 @@ private struct EastMoneySearchItem: Decodable {
     }
 }
 
+private struct EastMoneyQuoteResponse: Decodable {
+    var data: EastMoneyQuoteData?
+}
+
+private struct EastMoneyQuoteData: Decodable {
+    var diff: [EastMoneyQuoteItem]?
+}
+
+private struct EastMoneyQuoteItem: Decodable {
+    var code: String?
+    var market: Int?
+    var name: String?
+    var price: Double?
+    var previousClose: Double?
+    var updatedAt: Int?
+    var scale: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case code = "f12"
+        case market = "f13"
+        case name = "f14"
+        case price = "f2"
+        case previousClose = "f18"
+        case updatedAt = "f124"
+        case scale = "f152"
+    }
+}
+
 private struct RawStockQuote {
     var asset: TrackedAsset
     var price: Double
@@ -1124,9 +1225,15 @@ extension AssetService {
         var firstError: Error?
 
         switch stockDataSource {
-        case .chinesePublic:
+        case .eastMoney:
             do {
                 stockResults.append(contentsOf: try await searchEastMoneyStocks(query: trimmed))
+            } catch {
+                firstError = error
+            }
+        case .tencent:
+            do {
+                stockResults.append(contentsOf: try await searchTencentStocks(query: trimmed))
             } catch {
                 firstError = error
             }
@@ -1228,6 +1335,65 @@ extension AssetService {
             let source = item.securityTypeName ?? item.exchange ?? "东方财富"
             return AssetSearchResult(type: .stock, name: name, symbol: code.uppercased(), canonicalSymbol: canonical, source: source)
         }
+    }
+
+    private func searchTencentStocks(query: String) async throws -> [AssetSearchResult] {
+        var components = URLComponents(string: "https://smartbox.gtimg.cn/s3/")!
+        components.queryItems = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "t", value: "all")
+        ]
+
+        guard let url = components.url else { return [] }
+        let data = try await requestData(from: url)
+        let responseText = String(data: data, encoding: .utf8) ?? ""
+        let hint = try decodeTencentSearchHint(responseText)
+
+        return hint
+            .split(separator: "^")
+            .compactMap { entry -> AssetSearchResult? in
+                let parts = entry.split(separator: "~", omittingEmptySubsequences: false).map(String.init)
+                guard parts.count >= 5 else { return nil }
+
+                let market = parts[0].uppercased()
+                let rawCode = parts[1].uppercased()
+                let name = parts[2].trimmingCharacters(in: .whitespacesAndNewlines)
+                let type = parts[4].uppercased()
+                guard type.hasPrefix("GP"), !name.isEmpty else { return nil }
+
+                let symbol: String
+                let canonical: String
+                switch market {
+                case "HK":
+                    symbol = paddedHongKongCode(rawCode)
+                    canonical = "HK:\(symbol)"
+                case "SH":
+                    symbol = rawCode
+                    canonical = "SH:\(symbol)"
+                case "SZ":
+                    symbol = rawCode
+                    canonical = "SZ:\(symbol)"
+                case "US":
+                    symbol = rawCode.split(separator: ".").first.map(String.init) ?? rawCode
+                    canonical = "US:\(symbol)"
+                default:
+                    return nil
+                }
+
+                return AssetSearchResult(type: .stock, name: name, symbol: symbol, canonicalSymbol: canonical, source: "腾讯")
+            }
+    }
+
+    private func decodeTencentSearchHint(_ text: String) throws -> String {
+        guard let firstQuote = text.firstIndex(of: "\""),
+              let lastQuote = text.lastIndex(of: "\""),
+              firstQuote < lastQuote else {
+            throw NSError(domain: "CareAssets.TencentSearch", code: 1)
+        }
+
+        let rawHint = String(text[text.index(after: firstQuote)..<lastQuote])
+        let jsonString = "\"\(rawHint)\""
+        return try JSONDecoder().decode(String.self, from: Data(jsonString.utf8))
     }
 
     private func searchYahooStocks(query: String) async throws -> [AssetSearchResult] {
@@ -1487,11 +1653,52 @@ extension AssetService {
 
     private func fetchStockQuote(_ asset: TrackedAsset, dataSource: StockDataSource) async throws -> RawStockQuote {
         switch dataSource {
-        case .chinesePublic:
+        case .eastMoney:
+            return try await fetchEastMoneyStockQuote(asset)
+        case .tencent:
             return try await fetchTencentStockQuote(asset)
         case .yahooFinance:
             return try await fetchYahooStockQuote(asset)
         }
+    }
+
+    private func fetchEastMoneyStockQuote(_ asset: TrackedAsset) async throws -> RawStockQuote {
+        guard let secID = eastMoneySecID(for: asset) else {
+            throw NSError(domain: "CareAssets.EastMoney", code: 1)
+        }
+
+        var components = URLComponents(string: "https://push2.eastmoney.com/api/qt/ulist.np/get")!
+        components.queryItems = [
+            URLQueryItem(name: "secids", value: secID),
+            URLQueryItem(name: "fields", value: "f12,f13,f14,f2,f18,f124,f152")
+        ]
+        guard let url = components.url else {
+            throw NSError(domain: "CareAssets.EastMoney", code: 2)
+        }
+
+        let data = try await requestData(from: url)
+        let response = try JSONDecoder().decode(EastMoneyQuoteResponse.self, from: data)
+        guard let item = response.data?.diff?.first,
+              let rawPrice = item.price,
+              let rawPreviousClose = item.previousClose,
+              rawPrice > 0 else {
+            throw NSError(domain: "CareAssets.EastMoney", code: 3)
+        }
+
+        let scale = eastMoneyPriceScale(for: item)
+        let price = rawPrice / scale
+        let previousClose = rawPreviousClose / scale
+        let currency = stockCurrency(for: asset)
+
+        return RawStockQuote(
+            asset: asset,
+            price: price,
+            previousClose: previousClose,
+            currency: currency,
+            displayName: item.name?.isEmpty == false ? item.name! : asset.name,
+            source: "东方财富行情",
+            updatedAt: item.updatedAt.map { Date(timeIntervalSince1970: TimeInterval($0)) }
+        )
     }
 
     private func fetchYahooStockQuote(_ asset: TrackedAsset) async throws -> RawStockQuote {
@@ -2112,7 +2319,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     private var isRefreshing = false
     private var colorMode: PriceColorMode = .white
     private var statusBarBackgroundMode: StatusBarBackgroundMode = .dark
-    private var stockDataSource: StockDataSource = .chinesePublic
+    private var stockDataSource: StockDataSource = .tencent
     private var language: AppLanguage = .system
     private var isSearchOpen = false
     private var isEditingAssets = false
@@ -2743,6 +2950,12 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         menu.addItem(makeParentMenuItem(title: L10n.languageSetting, submenu: makeLanguageMenu()))
         menu.addItem(.separator())
 
+        let launchAtLogin = NSMenuItem(title: L10n.launchAtLogin, action: #selector(launchAtLoginMenuItemClicked(_:)), keyEquivalent: "")
+        launchAtLogin.target = self
+        launchAtLogin.state = LoginLaunchAgent.isEnabled ? .on : .off
+        menu.addItem(launchAtLogin)
+        menu.addItem(.separator())
+
         let quit = NSMenuItem(title: L10n.quit, action: #selector(quitClicked), keyEquivalent: "")
         quit.target = self
         menu.addItem(quit)
@@ -2881,6 +3094,17 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         L10n.appLanguage = language
         onLanguageChange?(language)
         render()
+    }
+
+    @objc private func launchAtLoginMenuItemClicked(_ sender: NSMenuItem) {
+        let shouldEnable = sender.state != .on
+        do {
+            try LoginLaunchAgent.setEnabled(shouldEnable)
+            sender.state = shouldEnable ? .on : .off
+        } catch {
+            showToast(L10n.launchAtLoginFailed)
+            NSLog("CareAssets launch at login update failed: \(error.localizedDescription)")
+        }
     }
 
     @objc private func searchClicked(_ sender: Any) {
@@ -3900,6 +4124,34 @@ private func tencentStockSymbol(for asset: TrackedAsset) -> String? {
         return "sz\(parts[1])"
     default:
         return nil
+    }
+}
+
+private func eastMoneySecID(for asset: TrackedAsset) -> String? {
+    let canonical = (asset.canonicalSymbol ?? canonicalAssetSymbol(type: asset.type, symbol: asset.symbol)).uppercased()
+    let parts = canonical.split(separator: ":", maxSplits: 1).map(String.init)
+    guard parts.count == 2 else { return nil }
+
+    switch parts[0] {
+    case "HK":
+        return "116.\(paddedHongKongCode(parts[1]))"
+    case "US":
+        return "105.\(parts[1])"
+    case "SH":
+        return "1.\(parts[1])"
+    case "SZ":
+        return "0.\(parts[1])"
+    default:
+        return nil
+    }
+}
+
+private func eastMoneyPriceScale(for item: EastMoneyQuoteItem) -> Double {
+    switch item.market {
+    case 105, 106, 107, 116:
+        return 1000
+    default:
+        return 100
     }
 }
 
