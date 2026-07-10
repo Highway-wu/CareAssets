@@ -516,6 +516,9 @@ private func canonicalStockSymbol(from symbol: String) -> String {
         let code = uppercased.replacingOccurrences(of: ".HK", with: "")
         return "HK:\(paddedHongKongCode(code))"
     }
+    if uppercased.hasSuffix(".KS") || uppercased.hasSuffix(".KQ") {
+        return "KR:\(String(uppercased.dropLast(3)))"
+    }
     if uppercased.hasSuffix(".SS") {
         return "SH:\(uppercased.replacingOccurrences(of: ".SS", with: ""))"
     }
@@ -700,10 +703,13 @@ final class AssetService {
         assetIdentity(for: asset)
     }
 
-    private func requestData(from url: URL) async throws -> Data {
+    private func requestData(from url: URL, timeoutInterval: TimeInterval? = nil) async throws -> Data {
         var request = URLRequest(url: url)
         request.setValue("CareAssets/1.0 macOS", forHTTPHeaderField: "User-Agent")
         request.cachePolicy = .reloadIgnoringLocalCacheData
+        if let timeoutInterval {
+            request.timeoutInterval = timeoutInterval
+        }
 
         let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
@@ -1667,38 +1673,54 @@ extension AssetService {
             throw NSError(domain: "CareAssets.EastMoney", code: 1)
         }
 
-        var components = URLComponents(string: "https://push2.eastmoney.com/api/qt/ulist.np/get")!
-        components.queryItems = [
-            URLQueryItem(name: "secids", value: secID),
-            URLQueryItem(name: "fields", value: "f12,f13,f14,f2,f18,f124,f152")
+        let quoteHosts: [(host: String, timeoutInterval: TimeInterval)] = [
+            ("push2.eastmoney.com", 3),
+            ("push2delay.eastmoney.com", 12)
         ]
-        guard let url = components.url else {
-            throw NSError(domain: "CareAssets.EastMoney", code: 2)
+        var firstError: Error?
+
+        for quoteHost in quoteHosts {
+            do {
+                var components = URLComponents(string: "https://\(quoteHost.host)/api/qt/ulist.np/get")!
+                components.queryItems = [
+                    URLQueryItem(name: "secids", value: secID),
+                    URLQueryItem(name: "fields", value: "f12,f13,f14,f2,f18,f124,f152")
+                ]
+                guard let url = components.url else {
+                    throw NSError(domain: "CareAssets.EastMoney", code: 2)
+                }
+
+                let data = try await requestData(from: url, timeoutInterval: quoteHost.timeoutInterval)
+                let response = try JSONDecoder().decode(EastMoneyQuoteResponse.self, from: data)
+                guard let item = response.data?.diff?.first,
+                      let rawPrice = item.price,
+                      let rawPreviousClose = item.previousClose,
+                      rawPrice > 0 else {
+                    throw NSError(domain: "CareAssets.EastMoney", code: 3)
+                }
+
+                let scale = eastMoneyPriceScale(for: item)
+                let price = rawPrice / scale
+                let previousClose = rawPreviousClose / scale
+                let currency = stockCurrency(for: asset)
+
+                return RawStockQuote(
+                    asset: asset,
+                    price: price,
+                    previousClose: previousClose,
+                    currency: currency,
+                    displayName: item.name?.isEmpty == false ? item.name! : asset.name,
+                    source: "东方财富行情",
+                    updatedAt: item.updatedAt.map { Date(timeIntervalSince1970: TimeInterval($0)) }
+                )
+            } catch {
+                if firstError == nil {
+                    firstError = error
+                }
+            }
         }
 
-        let data = try await requestData(from: url)
-        let response = try JSONDecoder().decode(EastMoneyQuoteResponse.self, from: data)
-        guard let item = response.data?.diff?.first,
-              let rawPrice = item.price,
-              let rawPreviousClose = item.previousClose,
-              rawPrice > 0 else {
-            throw NSError(domain: "CareAssets.EastMoney", code: 3)
-        }
-
-        let scale = eastMoneyPriceScale(for: item)
-        let price = rawPrice / scale
-        let previousClose = rawPreviousClose / scale
-        let currency = stockCurrency(for: asset)
-
-        return RawStockQuote(
-            asset: asset,
-            price: price,
-            previousClose: previousClose,
-            currency: currency,
-            displayName: item.name?.isEmpty == false ? item.name! : asset.name,
-            source: "东方财富行情",
-            updatedAt: item.updatedAt.map { Date(timeIntervalSince1970: TimeInterval($0)) }
-        )
+        throw firstError ?? NSError(domain: "CareAssets.EastMoney", code: 4)
     }
 
     private func fetchYahooStockQuote(_ asset: TrackedAsset) async throws -> RawStockQuote {
@@ -2297,7 +2319,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     }
 
     private enum SearchListItem {
-        case group(String)
+        case group(title: String, count: Int, accentColor: NSColor)
         case result(AssetSearchResult)
     }
 
@@ -2342,11 +2364,13 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     private var scrollWidth: CGFloat { isRTL ? contentWidth : contentWidth + horizontalInset }
     private let assetRowHeight: CGFloat = 52
     private let searchResultRowHeight: CGFloat = 52
-    private let searchGroupHeaderHeight: CGFloat = 24
+    private let searchGroupHeaderHeight: CGFloat = 30
+    private let searchGroupGap: CGFloat = 16
     private let searchExpandedMinListHeight: CGFloat = 260
     private let searchExpandedMaxListHeight: CGFloat = 420
     private let listRowGap: CGFloat = 8
     private let headerHeight: CGFloat = 30
+    private let headerActionButtonWidth: CGFloat = 58
     private let footerHeight: CGFloat = 30
     private let horizontalInset: CGFloat = 18
     private let topInset: CGFloat = 16
@@ -2470,19 +2494,20 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     }
 
     private var searchListItems: [SearchListItem] {
-        var groups: [(String, [AssetSearchResult])] = []
+        var groups: [(title: String, accentColor: NSColor, results: [AssetSearchResult])] = []
 
         for result in searchResults {
             let title = searchGroupTitle(for: result)
-            if let index = groups.firstIndex(where: { $0.0 == title }) {
-                groups[index].1.append(result)
+            if let index = groups.firstIndex(where: { $0.title == title }) {
+                groups[index].results.append(result)
             } else {
-                groups.append((title, [result]))
+                groups.append((title, searchGroupAccentColor(for: result), [result]))
             }
         }
 
-        return groups.flatMap { title, results in
-            [SearchListItem.group(title)] + results.map(SearchListItem.result)
+        return groups.flatMap { group in
+            [SearchListItem.group(title: group.title, count: group.results.count, accentColor: group.accentColor)]
+                + group.results.map(SearchListItem.result)
         }
     }
 
@@ -2493,7 +2518,15 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         let itemHeight = items.reduce(CGFloat(0)) { total, item in
             total + searchListItemHeight(item)
         }
-        return itemHeight + CGFloat(max(items.count - 1, 0)) * listRowGap
+        let groupBreakCount = items.dropFirst().reduce(0) { count, item in
+            if case .group = item {
+                return count + 1
+            }
+            return count
+        }
+        let defaultGapHeight = CGFloat(max(items.count - 1, 0)) * listRowGap
+        let extraGroupGapHeight = CGFloat(groupBreakCount) * (searchGroupGap - listRowGap)
+        return itemHeight + defaultGapHeight + extraGroupGapHeight
     }
 
     private var isRTL: Bool {
@@ -2606,17 +2639,26 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         settings.bezelStyle = .rounded
         settings.controlSize = .small
         settings.font = appFont(ofSize: 12, weight: .semibold)
+        settings.widthAnchor.constraint(equalToConstant: headerActionButtonWidth).isActive = true
 
         let edit = NSButton(title: isEditingAssets ? L10n.doneEditing : L10n.edit, target: self, action: #selector(toggleAssetEditingClicked(_:)))
         edit.bezelStyle = .rounded
         edit.controlSize = .small
         edit.font = appFont(ofSize: 12, weight: .semibold)
+        if !isEditingAssets {
+            edit.widthAnchor.constraint(equalToConstant: headerActionButtonWidth).isActive = true
+        }
 
         let add = NSButton(title: L10n.add, target: self, action: #selector(toggleSearchClicked(_:)))
         add.bezelStyle = .rounded
         add.controlSize = .small
         add.font = appFont(ofSize: 12, weight: .semibold)
-        addArrangedSubviews([brand, spacer, refresh, settings, edit, add], to: row)
+        add.widthAnchor.constraint(equalToConstant: headerActionButtonWidth).isActive = true
+
+        let headerViews = isEditingAssets
+            ? [brand, spacer, refresh, edit]
+            : [brand, spacer, refresh, settings, edit, add]
+        addArrangedSubviews(headerViews, to: row)
         return row
     }
 
@@ -2766,13 +2808,13 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         button.controlSize = .small
         button.font = appFont(ofSize: 12, weight: .semibold)
         button.isEnabled = !isSearching
-        button.widthAnchor.constraint(equalToConstant: 58).isActive = true
+        button.widthAnchor.constraint(equalToConstant: headerActionButtonWidth).isActive = true
 
         let cancel = NSButton(title: L10n.cancel, target: self, action: #selector(cancelSearchClicked(_:)))
         cancel.bezelStyle = .rounded
         cancel.controlSize = .small
         cancel.font = appFont(ofSize: 12, weight: .semibold)
-        cancel.widthAnchor.constraint(equalToConstant: 58).isActive = true
+        cancel.widthAnchor.constraint(equalToConstant: headerActionButtonWidth).isActive = true
         addArrangedSubviews([field, button, cancel], to: inputRow)
 
         return inputRow
@@ -2817,13 +2859,21 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         } else if searchResults.isEmpty {
             stack.addArrangedSubview(makeSearchMessageRow(L10n.emptySearchPrompt))
         } else {
+            var previousView: NSView?
             for item in searchListItems {
-                switch item {
-                case let .group(title):
-                    stack.addArrangedSubview(makeSearchGroupHeader(title))
-                case let .result(result):
-                    stack.addArrangedSubview(makeSearchResultRow(result))
+                if case .group = item, let previousView {
+                    stack.setCustomSpacing(searchGroupGap, after: previousView)
                 }
+
+                let itemView: NSView
+                switch item {
+                case let .group(title, count, accentColor):
+                    itemView = makeSearchGroupHeader(title, count: count, accentColor: accentColor)
+                case let .result(result):
+                    itemView = makeSearchResultRow(result)
+                }
+                stack.addArrangedSubview(itemView)
+                previousView = itemView
             }
         }
 
@@ -2852,20 +2902,53 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         return container
     }
 
-    private func makeSearchGroupHeader(_ title: String) -> NSView {
+    private func makeSearchGroupHeader(_ title: String, count: Int, accentColor: NSColor) -> NSView {
         let container = NSView()
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.055).cgColor
+        container.layer?.cornerRadius = 4
         container.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
         container.heightAnchor.constraint(equalToConstant: searchGroupHeaderHeight).isActive = true
 
-        let label = makeLabel(title, font: appFont(ofSize: 11, weight: .semibold), color: NSColor.white.withAlphaComponent(0.62), alignment: leadingTextAlignment)
+        let accent = NSView()
+        accent.wantsLayer = true
+        accent.layer?.backgroundColor = accentColor.cgColor
+        accent.layer?.cornerRadius = 1.5
+        accent.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(accent)
+
+        let label = makeLabel(title, font: appFont(ofSize: 12, weight: .semibold), color: NSColor.white.withAlphaComponent(0.88), alignment: leadingTextAlignment)
         label.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(label)
 
+        let countLabel = makeLabel("\(count)", font: appFont(ofSize: 10, weight: .semibold), color: NSColor.white.withAlphaComponent(0.46), alignment: trailingTextAlignment)
+        countLabel.translatesAutoresizingMaskIntoConstraints = false
+        countLabel.widthAnchor.constraint(equalToConstant: 24).isActive = true
+        container.addSubview(countLabel)
+
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: isRTL ? 0 : 26),
-            label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: isRTL ? -26 : 0),
-            label.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -2)
+            accent.widthAnchor.constraint(equalToConstant: 3),
+            accent.heightAnchor.constraint(equalToConstant: 14),
+            accent.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            countLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor)
         ])
+
+        if isRTL {
+            NSLayoutConstraint.activate([
+                accent.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -18),
+                label.trailingAnchor.constraint(equalTo: accent.leadingAnchor, constant: -8),
+                label.leadingAnchor.constraint(greaterThanOrEqualTo: countLabel.trailingAnchor, constant: 8),
+                countLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12)
+            ])
+        } else {
+            NSLayoutConstraint.activate([
+                accent.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 18),
+                label.leadingAnchor.constraint(equalTo: accent.trailingAnchor, constant: 8),
+                label.trailingAnchor.constraint(lessThanOrEqualTo: countLabel.leadingAnchor, constant: -8),
+                countLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12)
+            ])
+        }
 
         return container
     }
@@ -2934,10 +3017,37 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
             if canonical.hasPrefix("US:") {
                 return L10n.text("美股", "US", zhHant: "美股", ja: "米国株", ar: "الولايات المتحدة", de: "USA", fr: "États-Unis", ko: "미국", ptPT: "EUA", es: "EE. UU.")
             }
+            if canonical.hasPrefix("KR:") {
+                return L10n.text("韩股", "Korea", zhHant: "韓股", ja: "韓国株", ar: "كوريا الجنوبية", de: "Südkorea", fr: "Corée du Sud", ko: "한국", ptPT: "Coreia do Sul", es: "Corea del Sur")
+            }
             if canonical.hasPrefix("SH:") || canonical.hasPrefix("SZ:") {
                 return L10n.text("A 股", "A-shares", zhHant: "A 股", ja: "A株", ar: "أسهم A", de: "A-Aktien", fr: "Actions A", ko: "A주", ptPT: "A-shares", es: "Acciones A")
             }
             return result.source
+        }
+    }
+
+    private func searchGroupAccentColor(for result: AssetSearchResult) -> NSColor {
+        switch result.type {
+        case .crypto:
+            return NSColor(calibratedRed: 0.60, green: 0.50, blue: 0.96, alpha: 1)
+        case .gold:
+            return NSColor(calibratedRed: 0.96, green: 0.72, blue: 0.25, alpha: 1)
+        case .stock:
+            let canonical = (result.canonicalSymbol ?? canonicalAssetSymbol(type: result.type, symbol: result.symbol)).uppercased()
+            if canonical.hasPrefix("HK:") {
+                return NSColor(calibratedRed: 0.96, green: 0.38, blue: 0.48, alpha: 1)
+            }
+            if canonical.hasPrefix("US:") {
+                return NSColor(calibratedRed: 0.38, green: 0.62, blue: 0.98, alpha: 1)
+            }
+            if canonical.hasPrefix("KR:") {
+                return NSColor(calibratedRed: 0.28, green: 0.76, blue: 0.82, alpha: 1)
+            }
+            if canonical.hasPrefix("SH:") || canonical.hasPrefix("SZ:") {
+                return NSColor(calibratedRed: 0.98, green: 0.56, blue: 0.28, alpha: 1)
+            }
+            return NSColor.white.withAlphaComponent(0.48)
         }
     }
 
@@ -3270,6 +3380,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
             let canonical = (asset.canonicalSymbol ?? canonicalAssetSymbol(type: asset.type, symbol: asset.symbol)).uppercased()
             if canonical.hasPrefix("HK:") { return "HK" }
             if canonical.hasPrefix("US:") { return "US" }
+            if canonical.hasPrefix("KR:") { return "KR" }
             if canonical.hasPrefix("SH:") { return "SH" }
             if canonical.hasPrefix("SZ:") { return "SZ" }
             return "STOCK"
@@ -4079,6 +4190,8 @@ private func eastMoneyCanonicalSymbol(for item: EastMoneySearchItem) -> String? 
                 return "HK:\(paddedHongKongCode(parts[1]))"
             case "105", "106", "107":
                 return "US:\(parts[1])"
+            case "177":
+                return "KR:\(parts[1])"
             case "1":
                 return "SH:\(parts[1])"
             case "0":
@@ -4102,7 +4215,10 @@ private func eastMoneyCanonicalSymbol(for item: EastMoneySearchItem) -> String? 
     if classify == "USSTOCK" || ["NASDAQ", "NYSE", "AMEX"].contains(exchange) {
         return "US:\(uppercased)"
     }
-    if classify == "ASTOCK" || uppercased.range(of: #"^\d{6}$"#, options: .regularExpression) != nil {
+    if classify == "KRX" || exchange == "KRX" {
+        return "KR:\(uppercased)"
+    }
+    if classify == "ASTOCK" {
         return uppercased.hasPrefix("6") ? "SH:\(uppercased)" : "SZ:\(uppercased)"
     }
     return nil
@@ -4137,6 +4253,8 @@ private func eastMoneySecID(for asset: TrackedAsset) -> String? {
         return "116.\(paddedHongKongCode(parts[1]))"
     case "US":
         return "105.\(parts[1])"
+    case "KR":
+        return "177.\(parts[1])"
     case "SH":
         return "1.\(parts[1])"
     case "SZ":
@@ -4172,6 +4290,12 @@ private func yahooStockSymbol(for asset: TrackedAsset) -> String {
         return "\(parts[1]).SZ"
     case "US":
         return parts[1]
+    case "KR":
+        let original = asset.symbol.uppercased()
+        if original.hasSuffix(".KS") || original.hasSuffix(".KQ") {
+            return original
+        }
+        return parts[1]
     default:
         return asset.symbol
     }
@@ -4184,6 +4308,9 @@ private func stockCurrency(for asset: TrackedAsset) -> String {
     }
     if canonical.hasPrefix("US:") {
         return "USD"
+    }
+    if canonical.hasPrefix("KR:") {
+        return "KRW"
     }
     return "CNY"
 }
