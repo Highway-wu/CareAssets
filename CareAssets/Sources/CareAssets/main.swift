@@ -162,6 +162,16 @@ enum L10n {
     static var remove: String { text("移出", "Remove", zhHant: "移除", ja: "削除", ar: "إزالة", de: "Entfernen", fr: "Retirer", ko: "제거", ptPT: "Remover", es: "Quitar") }
     static var added: String { text("已添加", "Added", zhHant: "已新增", ja: "追加済み", ar: "مُضاف", de: "Hinzugefügt", fr: "Ajouté", ko: "추가됨", ptPT: "Adicionado", es: "Añadido") }
     static var settings: String { text("设置", "Settings", zhHant: "設定", ja: "設定", ar: "الإعدادات", de: "Einstellungen", fr: "Réglages", ko: "설정", ptPT: "Definições", es: "Ajustes") }
+    static var edit: String { text("编辑", "Edit", zhHant: "編輯", ja: "編集", ar: "تحرير", de: "Bearbeiten", fr: "Modifier", ko: "편집", ptPT: "Editar", es: "Editar") }
+    static var doneEditing: String { text("完成编辑", "Done editing", zhHant: "完成編輯", ja: "編集完了", ar: "إنهاء التحرير", de: "Fertig", fr: "Terminer", ko: "편집 완료", ptPT: "Concluir edição", es: "Terminar edición") }
+    static var position: String { text("持仓", "Position", zhHant: "持倉", ja: "保有", ar: "المركز", de: "Position", fr: "Position", ko: "보유", ptPT: "Posição", es: "Posición") }
+    static var quantity: String { text("持仓数量", "Quantity", zhHant: "持倉數量", ja: "数量", ar: "الكمية", de: "Menge", fr: "Quantité", ko: "수량", ptPT: "Quantidade", es: "Cantidad") }
+    static var averageBuyPrice: String { text("平均买入价", "Average buy price", zhHant: "平均買入價", ja: "平均取得単価", ar: "متوسط سعر الشراء", de: "Durchschnittskaufpreis", fr: "Prix moyen", ko: "평균 매수가", ptPT: "Preço médio", es: "Precio medio") }
+    static var save: String { text("保存", "Save", zhHant: "儲存", ja: "保存", ar: "حفظ", de: "Speichern", fr: "Enregistrer", ko: "저장", ptPT: "Guardar", es: "Guardar") }
+    static var clear: String { text("清空", "Clear", zhHant: "清空", ja: "クリア", ar: "مسح", de: "Leeren", fr: "Effacer", ko: "비우기", ptPT: "Limpar", es: "Limpiar") }
+    static var unrealizedProfit: String { text("浮盈", "Unrealized gain", zhHant: "浮盈", ja: "含み益", ar: "ربح غير محقق", de: "Buchgewinn", fr: "Gain latent", ko: "평가이익", ptPT: "Ganho não realizado", es: "Ganancia no realizada") }
+    static var unrealizedLoss: String { text("浮亏", "Unrealized loss", zhHant: "浮虧", ja: "含み損", ar: "خسارة غير محققة", de: "Buchverlust", fr: "Perte latente", ko: "평가손실", ptPT: "Perda não realizada", es: "Pérdida no realizada") }
+    static var marketValue: String { text("市值", "Value", zhHant: "市值", ja: "評価額", ar: "القيمة", de: "Wert", fr: "Valeur", ko: "평가액", ptPT: "Valor", es: "Valor") }
     static var colorSetting: String { text("价格颜色", "Price color", zhHant: "價格顏色", ja: "価格色", ar: "لون السعر", de: "Preisfarbe", fr: "Couleur prix", ko: "가격 색상", ptPT: "Cor preço", es: "Color precio") }
     static var languageSetting: String { text("语言", "Language", zhHant: "語言", ja: "言語", ar: "اللغة", de: "Sprache", fr: "Langue", ko: "언어", ptPT: "Idioma", es: "Idioma") }
     static var stockDataSourceSetting: String { text("股票数据源", "Stock data source", zhHant: "股票資料源", ja: "株価データ元", ar: "مصدر بيانات الأسهم", de: "Aktien-Datenquelle", fr: "Source actions", ko: "주식 데이터 소스", ptPT: "Fonte de ações", es: "Fuente acciones") }
@@ -192,6 +202,14 @@ enum L10n {
 
     static func searchFailed(_ message: String) -> String {
         text("搜索失败：\(message)", "Search failed: \(message)", zhHant: "搜尋失敗：\(message)", ja: "検索失敗：\(message)", ar: "فشل البحث: \(message)", de: "Suche fehlgeschlagen: \(message)", fr: "Recherche échouée : \(message)", ko: "검색 실패: \(message)", ptPT: "Pesquisa falhou: \(message)", es: "Error de búsqueda: \(message)")
+    }
+
+    static func editPositionTitle(_ name: String) -> String {
+        text("\(name) 持仓", "\(name) position", zhHant: "\(name) 持倉", ja: "\(name) 保有", ar: "مركز \(name)", de: "\(name) Position", fr: "Position \(name)", ko: "\(name) 보유", ptPT: "Posição \(name)", es: "Posición \(name)")
+    }
+
+    static func invalidPositionInput() -> String {
+        text("持仓数量和平均买入价需要是大于 0 的数字。", "Quantity and average buy price must be numbers greater than 0.", zhHant: "持倉數量和平均買入價需要是大於 0 的數字。")
     }
 }
 
@@ -289,6 +307,8 @@ struct TrackedAsset: Codable, Sendable {
     var name: String
     var symbol: String
     var canonicalSymbol: String?
+    var holdingQuantity: Double?
+    var averageBuyPrice: Double?
     var visibleInMenuBar: Bool
 }
 
@@ -311,9 +331,9 @@ struct AppConfig: Codable, Sendable {
         stockDataSource: .chinesePublic,
         language: .system,
         assets: [
-            TrackedAsset(type: .gold, name: L10n.gold, symbol: "JD_GOLD", canonicalSymbol: "GOLD:JD_GOLD", visibleInMenuBar: true),
-            TrackedAsset(type: .crypto, name: "BTC", symbol: "BTCUSDT", canonicalSymbol: "CRYPTO:BTC", visibleInMenuBar: true),
-            TrackedAsset(type: .crypto, name: "ETH", symbol: "ETHUSDT", canonicalSymbol: "CRYPTO:ETH", visibleInMenuBar: true),
+            TrackedAsset(type: .gold, name: L10n.gold, symbol: "JD_GOLD", canonicalSymbol: "GOLD:JD_GOLD", holdingQuantity: nil, averageBuyPrice: nil, visibleInMenuBar: true),
+            TrackedAsset(type: .crypto, name: "BTC", symbol: "BTCUSDT", canonicalSymbol: "CRYPTO:BTC", holdingQuantity: nil, averageBuyPrice: nil, visibleInMenuBar: true),
+            TrackedAsset(type: .crypto, name: "ETH", symbol: "ETHUSDT", canonicalSymbol: "CRYPTO:ETH", holdingQuantity: nil, averageBuyPrice: nil, visibleInMenuBar: true),
         ]
     )
 
@@ -368,14 +388,38 @@ struct DisplayAsset: Sendable {
     var symbol: String
     var canonicalSymbol: String?
     var source: String
+    var currentPrice: Double?
+    var currency: String?
     var menuPriceText: String
     var priceText: String
     var detailText: String
     var changeText: String
     var changePercent: Double?
     var updatedAt: Date?
+    var holdingQuantity: Double?
+    var averageBuyPrice: Double?
     var visibleInMenuBar: Bool
     var errorMessage: String?
+
+    var positionProfitAmount: Double? {
+        guard let currentPrice, let holdingQuantity, let averageBuyPrice,
+              holdingQuantity > 0, averageBuyPrice > 0 else { return nil }
+        return (currentPrice - averageBuyPrice) * holdingQuantity
+    }
+
+    var positionProfitPercent: Double? {
+        guard let currentPrice, let averageBuyPrice, averageBuyPrice > 0 else { return nil }
+        return (currentPrice - averageBuyPrice) / averageBuyPrice * 100.0
+    }
+
+    var positionMarketValue: Double? {
+        guard let currentPrice, let holdingQuantity, holdingQuantity > 0 else { return nil }
+        return currentPrice * holdingQuantity
+    }
+
+    var hasPosition: Bool {
+        positionProfitAmount != nil && positionProfitPercent != nil
+    }
 
     static func loading(from asset: TrackedAsset) -> DisplayAsset {
         DisplayAsset(
@@ -385,12 +429,16 @@ struct DisplayAsset: Sendable {
             symbol: asset.symbol,
             canonicalSymbol: asset.canonicalSymbol,
             source: "Loading",
+            currentPrice: nil,
+            currency: nil,
             menuPriceText: "--",
             priceText: "--",
             detailText: L10n.loading,
             changeText: "--",
             changePercent: nil,
             updatedAt: nil,
+            holdingQuantity: asset.holdingQuantity,
+            averageBuyPrice: asset.averageBuyPrice,
             visibleInMenuBar: asset.visibleInMenuBar,
             errorMessage: nil
         )
@@ -409,7 +457,7 @@ struct AssetSearchResult: Sendable, Equatable {
     }
 
     var trackedAsset: TrackedAsset {
-        TrackedAsset(type: type, name: name, symbol: symbol.uppercased(), canonicalSymbol: canonicalSymbol ?? canonicalAssetSymbol(type: type, symbol: symbol), visibleInMenuBar: false)
+        TrackedAsset(type: type, name: name, symbol: symbol.uppercased(), canonicalSymbol: canonicalSymbol ?? canonicalAssetSymbol(type: type, symbol: symbol), holdingQuantity: nil, averageBuyPrice: nil, visibleInMenuBar: false)
     }
 }
 
@@ -724,12 +772,16 @@ extension AssetService {
                 symbol: asset.symbol,
                 canonicalSymbol: asset.canonicalSymbol,
                 source: "K780",
+                currentPrice: price,
+                currency: "CNY",
                 menuPriceText: formatStatusNumber(price, minFraction: 0, maxFraction: 0),
                 priceText: "\(formatCNY(price, compact: false))\(L10n.gramSuffix)",
                 detailText: detail,
                 changeText: formatChange(amount: changeAmount, percent: percent, currencyPrefix: "¥"),
                 changePercent: percent,
                 updatedAt: parseLocalDateTime(quote.uptime),
+                holdingQuantity: asset.holdingQuantity,
+                averageBuyPrice: asset.averageBuyPrice,
                 visibleInMenuBar: asset.visibleInMenuBar,
                 errorMessage: nil
             )
@@ -789,12 +841,16 @@ extension AssetService {
                 symbol: asset.symbol,
                 canonicalSymbol: asset.canonicalSymbol,
                 source: "Yahoo Finance",
+                currentPrice: price,
+                currency: "CNY",
                 menuPriceText: formatStatusNumber(price, minFraction: 0, maxFraction: 0),
                 priceText: "\(formatCNY(price, compact: false))\(L10n.gramSuffix)",
                 detailText: previous.map { "\(L10n.close) \(formatCNY($0, compact: false))\(L10n.gramSuffix)" } ?? L10n.cnyPerGram,
                 changeText: formatChange(amount: change, percent: percent, currencyPrefix: "¥"),
                 changePercent: percent,
                 updatedAt: updatedAt,
+                holdingQuantity: asset.holdingQuantity,
+                averageBuyPrice: asset.averageBuyPrice,
                 visibleInMenuBar: asset.visibleInMenuBar,
                 errorMessage: nil
             )
@@ -831,12 +887,16 @@ extension AssetService {
                 symbol: asset.symbol,
                 canonicalSymbol: asset.canonicalSymbol,
                 source: "Yahoo Finance",
+                currentPrice: price,
+                currency: currency,
                 menuPriceText: formatStatusNumber(price, minFraction: 0, maxFraction: 0),
                 priceText: "\(formatCurrency(price, currencyCode: currency, compact: false))\(L10n.ounceSuffix)",
                 detailText: previous.map { "\(L10n.close) \(formatCurrency($0, currencyCode: currency, compact: false))\(L10n.ounceSuffix)" } ?? L10n.usdPerOunce,
                 changeText: formatChange(amount: change, percent: percent, currencyPrefix: currencySymbol(for: currency)),
                 changePercent: percent,
                 updatedAt: updatedAt,
+                holdingQuantity: asset.holdingQuantity,
+                averageBuyPrice: asset.averageBuyPrice,
                 visibleInMenuBar: asset.visibleInMenuBar,
                 errorMessage: nil
             )
@@ -912,12 +972,16 @@ extension AssetService {
                 symbol: asset.symbol,
                 canonicalSymbol: asset.canonicalSymbol,
                 source: "Coinbase",
+                currentPrice: price,
+                currency: quoteCurrency,
                 menuPriceText: formatStatusNumber(price, minFraction: 0, maxFraction: 0),
                 priceText: "\(formatNumber(price, minFraction: 2, maxFraction: 2)) \(quoteCurrency)",
                 detailText: productID,
                 changeText: formatChange(amount: change, percent: percent, currencyPrefix: ""),
                 changePercent: percent,
                 updatedAt: parseISO8601Date(ticker.time),
+                holdingQuantity: asset.holdingQuantity,
+                averageBuyPrice: asset.averageBuyPrice,
                 visibleInMenuBar: asset.visibleInMenuBar,
                 errorMessage: nil
             )
@@ -1121,12 +1185,16 @@ extension AssetService {
                 symbol: quote.asset.symbol,
                 canonicalSymbol: quote.asset.canonicalSymbol,
                 source: quote.source,
+                currentPrice: quote.price,
+                currency: quote.currency,
                 menuPriceText: formatStatusNumber(quote.price, minFraction: 2, maxFraction: 2),
-                priceText: "\(formatCurrency(quote.price, currencyCode: quote.currency, compact: false)) \(quote.currency)",
+                priceText: "\(formatNumber(quote.price, minFraction: 2, maxFraction: 2)) \(quote.currency)",
                 detailText: quote.asset.symbol,
                 changeText: formatChange(amount: change, percent: percent, currencyPrefix: currencySymbol(for: quote.currency)),
                 changePercent: percent,
                 updatedAt: quote.updatedAt,
+                holdingQuantity: quote.asset.holdingQuantity,
+                averageBuyPrice: quote.asset.averageBuyPrice,
                 visibleInMenuBar: quote.asset.visibleInMenuBar,
                 errorMessage: nil
             )
@@ -1773,6 +1841,15 @@ extension NSPasteboard.PasteboardType {
 
 final class AssetReorderRowView: NSStackView, NSDraggingSource {
     let assetID: String
+    var allowsReordering = true {
+        didSet {
+            if !allowsReordering {
+                mouseDownEvent = nil
+                didBeginDrag = false
+                clearDropIndicator()
+            }
+        }
+    }
     var onMoveAsset: ((String, String, Bool) -> Void)?
 
     private enum DropIndicatorPosition {
@@ -1815,11 +1892,13 @@ final class AssetReorderRowView: NSStackView, NSDraggingSource {
     }
 
     override func mouseDown(with event: NSEvent) {
+        guard allowsReordering else { return }
         mouseDownEvent = event
         didBeginDrag = false
     }
 
     override func mouseDragged(with event: NSEvent) {
+        guard allowsReordering else { return }
         guard !didBeginDrag else { return }
         guard let mouseDownEvent else { return }
 
@@ -1842,12 +1921,17 @@ final class AssetReorderRowView: NSStackView, NSDraggingSource {
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard allowsReordering else { return [] }
         guard draggingSourceID(from: sender) != nil else { return [] }
         updateDropIndicator(sender)
         return .move
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard allowsReordering else {
+            clearDropIndicator()
+            return []
+        }
         guard draggingSourceID(from: sender) != nil else {
             clearDropIndicator()
             return []
@@ -1862,6 +1946,7 @@ final class AssetReorderRowView: NSStackView, NSDraggingSource {
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         defer { clearDropIndicator() }
+        guard allowsReordering else { return false }
         guard let sourceID = draggingSourceID(from: sender), sourceID != assetID else {
             return false
         }
@@ -2014,6 +2099,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     var onToggleVisible: ((String, Bool) -> Void)?
     var onRemoveAsset: ((String) -> Void)?
     var onMoveAsset: ((String, String, Bool) -> Void)?
+    var onEditPosition: ((String) -> Void)?
     var onColorModeChange: ((PriceColorMode) -> Void)?
     var onStatusBarBackgroundModeChange: ((StatusBarBackgroundMode) -> Void)?
     var onStockDataSourceChange: ((StockDataSource) -> Void)?
@@ -2029,6 +2115,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     private var stockDataSource: StockDataSource = .chinesePublic
     private var language: AppLanguage = .system
     private var isSearchOpen = false
+    private var isEditingAssets = false
     private var isSearching = false
     private var searchQuery = ""
     private var searchResults: [AssetSearchResult] = []
@@ -2047,6 +2134,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     private var contentWidth: CGFloat { panelWidth - 36 }
     private var scrollWidth: CGFloat { isRTL ? contentWidth : contentWidth + horizontalInset }
     private let assetRowHeight: CGFloat = 52
+    private let searchResultRowHeight: CGFloat = 52
     private let searchGroupHeaderHeight: CGFloat = 24
     private let searchExpandedMinListHeight: CGFloat = 260
     private let searchExpandedMaxListHeight: CGFloat = 420
@@ -2059,6 +2147,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     private let stackSpacing: CGFloat = 10
     private let footerExtraTopSpacing: CGFloat = 6
     private let rtlScrollerGutterWidth: CGFloat = 10
+    private var rightColumnWidth: CGFloat { isEditingAssets ? 206 : 220 }
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale.autoupdatingCurrent
@@ -2133,11 +2222,6 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         let listView = isSearchOpen ? makeSearchList() : makeAssetList()
         root.addArrangedSubview(listView)
 
-        if !isSearchOpen {
-            root.setCustomSpacing(stackSpacing + footerExtraTopSpacing, after: listView)
-            root.addArrangedSubview(makeButtonRow())
-        }
-
         if shouldFocusSearchField {
             shouldFocusSearchField = false
             focusSearchFieldIfNeeded()
@@ -2158,14 +2242,13 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
             if hasSearchResults {
                 return min(max(searchDocumentHeight, searchExpandedMinListHeight), searchExpandedMaxListHeight)
             }
-            return searchModeListHeight ?? (assetListHeight + footerHeight + stackSpacing)
+            return searchModeListHeight ?? assetListHeight
         }
         return assetListHeight
     }
 
     private var preferredPanelHeight: CGFloat {
-        let footerBlockHeight = isSearchOpen ? 0 : (stackSpacing + footerExtraTopSpacing + footerHeight)
-        return topInset + headerHeight + stackSpacing + currentListHeight + footerBlockHeight + bottomInset
+        return topInset + headerHeight + stackSpacing + currentListHeight + bottomInset
     }
 
     private var searchResultRowCount: Int {
@@ -2303,11 +2386,30 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
+        let refresh = makeLabel(
+            L10n.refreshState(isRefreshing: isRefreshing, countdown: countdown),
+            font: appFont(ofSize: 11, weight: .semibold),
+            color: NSColor.white.withAlphaComponent(0.56),
+            alignment: .right
+        )
+        refresh.widthAnchor.constraint(equalToConstant: 62).isActive = true
+        refreshStateLabel = refresh
+
+        let settings = NSButton(title: L10n.settings, target: self, action: #selector(settingsClicked(_:)))
+        settings.bezelStyle = .rounded
+        settings.controlSize = .small
+        settings.font = appFont(ofSize: 12, weight: .semibold)
+
+        let edit = NSButton(title: isEditingAssets ? L10n.doneEditing : L10n.edit, target: self, action: #selector(toggleAssetEditingClicked(_:)))
+        edit.bezelStyle = .rounded
+        edit.controlSize = .small
+        edit.font = appFont(ofSize: 12, weight: .semibold)
+
         let add = NSButton(title: L10n.add, target: self, action: #selector(toggleSearchClicked(_:)))
         add.bezelStyle = .rounded
         add.controlSize = .small
         add.font = appFont(ofSize: 12, weight: .semibold)
-        addArrangedSubviews([brand, spacer, add], to: row)
+        addArrangedSubviews([brand, spacer, refresh, settings, edit, add], to: row)
         return row
     }
 
@@ -2360,6 +2462,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
 
     private func makeAssetRow(_ asset: DisplayAsset) -> NSView {
         let row = AssetReorderRowView(assetID: asset.id)
+        row.allowsReordering = isEditingAssets
         row.onMoveAsset = { [weak self] sourceID, targetID, placeAfterTarget in
             self?.onMoveAsset?(sourceID, targetID, placeAfterTarget)
         }
@@ -2381,7 +2484,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         left.alignment = leadingColumnAlignment
         left.spacing = 3
         left.addArrangedSubview(makeLabel(displayName(for: asset), font: appFont(ofSize: 14, weight: .bold), color: .white, alignment: leadingTextAlignment))
-        left.addArrangedSubview(makeMutedLabel(asset.detailText, alignment: leadingTextAlignment))
+        left.addArrangedSubview(makeAssetCodeLine(asset))
         left.widthAnchor.constraint(greaterThanOrEqualToConstant: 88).isActive = true
 
         let spacer = NSView()
@@ -2391,18 +2494,13 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         right.orientation = .vertical
         right.alignment = isRTL ? .leading : .trailing
         right.spacing = 3
-        right.addArrangedSubview(makeLabel(asset.priceText, font: appFont(ofSize: 15, weight: .bold), color: valueColor(for: asset), alignment: trailingTextAlignment))
+        right.widthAnchor.constraint(equalToConstant: rightColumnWidth).isActive = true
+        right.addArrangedSubview(makeAssetPriceLine(asset))
 
         if let message = asset.errorMessage {
             right.addArrangedSubview(makeAssetDetailLabel(asset, percentText: message, dateText: nil, isError: true))
-        } else if let updatedAt = asset.updatedAt {
-            right.addArrangedSubview(makeAssetDetailLabel(
-                asset,
-                percentText: formatPercent(asset.changePercent),
-                dateText: dateFormatter.string(from: updatedAt)
-            ))
-        } else {
-            right.addArrangedSubview(makeAssetDetailLabel(asset, percentText: formatPercent(asset.changePercent), dateText: nil))
+        } else if asset.hasPosition {
+            right.addArrangedSubview(makePositionDetailLabel(asset))
         }
 
         let remove = NSButton(title: "-", target: self, action: #selector(removeAssetClicked(_:)))
@@ -2412,11 +2510,31 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         remove.identifier = NSUserInterfaceItemIdentifier(asset.id)
         remove.toolTip = L10n.remove
         remove.widthAnchor.constraint(equalToConstant: 18).isActive = true
-        if isRTL {
-            addArrangedSubviews([makeRTLScrollerGutter(), visible, left, spacer, right, remove], to: row)
+
+        let position = NSButton(title: "持", target: self, action: #selector(editPositionClicked(_:)))
+        position.bezelStyle = .smallSquare
+        position.controlSize = .small
+        position.font = appFont(ofSize: 10, weight: .semibold)
+        position.identifier = NSUserInterfaceItemIdentifier(asset.id)
+        position.toolTip = L10n.position
+        position.widthAnchor.constraint(equalToConstant: 22).isActive = true
+        position.isHidden = asset.type != .stock
+
+        var rowViews: [NSView]
+        if isEditingAssets {
+            rowViews = isRTL
+                ? [makeRTLScrollerGutter(), visible, left, spacer, right]
+                : [visible, left, spacer, right]
+            if asset.type == .stock {
+                rowViews.append(position)
+            }
+            rowViews.append(remove)
         } else {
-            addArrangedSubviews([visible, left, spacer, right, remove], to: row)
+            rowViews = isRTL
+                ? [makeRTLScrollerGutter(), left, spacer, right]
+                : [left, spacer, right]
         }
+        addArrangedSubviews(rowViews, to: row)
 
         return row
     }
@@ -2457,7 +2575,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         let rowCount = searchResultRowCount
         let rowDocumentHeight = hasSearchResults
             ? searchDocumentHeight
-            : CGFloat(rowCount) * assetRowHeight + CGFloat(max(rowCount - 1, 0)) * listRowGap
+            : CGFloat(rowCount) * searchResultRowHeight + CGFloat(max(rowCount - 1, 0)) * listRowGap
         let listHeight = currentListHeight
         let documentHeight = max(rowDocumentHeight, listHeight)
 
@@ -2554,7 +2672,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         row.alignment = .centerY
         row.spacing = 8
         row.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
-        row.heightAnchor.constraint(equalToConstant: assetRowHeight).isActive = true
+        row.heightAnchor.constraint(equalToConstant: searchResultRowHeight).isActive = true
 
         let checkSpace = NSView()
         checkSpace.widthAnchor.constraint(equalToConstant: 18).isActive = true
@@ -2591,7 +2709,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         case .group:
             return searchGroupHeaderHeight
         case .result:
-            return assetRowHeight
+            return searchResultRowHeight
         }
     }
 
@@ -2623,6 +2741,11 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         menu.addItem(makeParentMenuItem(title: L10n.statusBarBackgroundSetting, submenu: makeStatusBarBackgroundMenu()))
         menu.addItem(makeParentMenuItem(title: L10n.stockDataSourceSetting, submenu: makeStockDataSourceMenu()))
         menu.addItem(makeParentMenuItem(title: L10n.languageSetting, submenu: makeLanguageMenu()))
+        menu.addItem(.separator())
+
+        let quit = NSMenuItem(title: L10n.quit, action: #selector(quitClicked), keyEquivalent: "")
+        quit.target = self
+        menu.addItem(quit)
         return menu
     }
 
@@ -2691,11 +2814,6 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         row.spacing = 8
         row.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
 
-        let settings = NSButton(title: L10n.settings, target: self, action: #selector(settingsClicked(_:)))
-        settings.bezelStyle = .rounded
-        settings.controlSize = .small
-        settings.font = appFont(ofSize: 12, weight: .semibold)
-
         let state = L10n.refreshState(isRefreshing: isRefreshing, countdown: countdown)
         let refresh = makeLabel(state, font: appFont(ofSize: 11, weight: .semibold), color: NSColor.white.withAlphaComponent(0.56), alignment: leadingTextAlignment)
         refreshStateLabel = refresh
@@ -2703,11 +2821,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let quit = NSButton(title: L10n.quit, target: self, action: #selector(quitClicked))
-        quit.bezelStyle = .rounded
-        quit.controlSize = .small
-        quit.font = appFont(ofSize: 12, weight: .semibold)
-        addArrangedSubviews([settings, refresh, spacer, quit], to: row)
+        addArrangedSubviews([refresh, spacer], to: row)
 
         return row
     }
@@ -2719,6 +2833,11 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
 
     @objc private func cancelSearchClicked(_ sender: NSButton) {
         closeSearchMode()
+        render()
+    }
+
+    @objc private func toggleAssetEditingClicked(_ sender: NSButton) {
+        isEditingAssets.toggle()
         render()
     }
 
@@ -2816,6 +2935,11 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         onRemoveAsset?(id)
     }
 
+    @objc private func editPositionClicked(_ sender: NSButton) {
+        guard let id = sender.identifier?.rawValue else { return }
+        onEditPosition?(id)
+    }
+
     @objc private func quitClicked() {
         onQuit?()
     }
@@ -2846,8 +2970,9 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
 
     private func openSearchMode() {
         isSearchOpen = true
+        isEditingAssets = false
         isSearching = false
-        searchModeListHeight = assetListHeight + footerHeight + stackSpacing
+        searchModeListHeight = assetListHeight
         searchQuery = ""
         searchResults = []
         searchMessage = L10n.emptySearchPrompt
@@ -2868,6 +2993,63 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
 
     private func makeMutedLabel(_ text: String, alignment: NSTextAlignment = .left) -> NSTextField {
         makeLabel(text, font: appFont(ofSize: 11, weight: .medium), color: NSColor.white.withAlphaComponent(0.50), alignment: alignment)
+    }
+
+    private func makeAssetCodeLine(_ asset: DisplayAsset) -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 5
+
+        let tag = makeAssetTypeTag(assetTagText(for: asset))
+        let code = makeMutedLabel(asset.detailText, alignment: leadingTextAlignment)
+        code.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        if isRTL {
+            row.addArrangedSubview(code)
+            row.addArrangedSubview(tag)
+        } else {
+            row.addArrangedSubview(tag)
+            row.addArrangedSubview(code)
+        }
+        return row
+    }
+
+    private func makeAssetTypeTag(_ text: String) -> NSView {
+        let container = NSView()
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.16).cgColor
+        container.layer?.cornerRadius = 3
+        container.heightAnchor.constraint(equalToConstant: 15).isActive = true
+
+        let label = makeLabel(text, font: appFont(ofSize: 9, weight: .bold), color: NSColor.white.withAlphaComponent(0.82), alignment: .center)
+        container.widthAnchor.constraint(equalToConstant: ceil(label.intrinsicContentSize.width) + 8).isActive = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 4),
+            label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -4),
+            label.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+        ])
+
+        return container
+    }
+
+    private func assetTagText(for asset: DisplayAsset) -> String {
+        switch asset.type {
+        case .gold:
+            return "GOLD"
+        case .crypto:
+            return "COIN"
+        case .stock:
+            let canonical = (asset.canonicalSymbol ?? canonicalAssetSymbol(type: asset.type, symbol: asset.symbol)).uppercased()
+            if canonical.hasPrefix("HK:") { return "HK" }
+            if canonical.hasPrefix("US:") { return "US" }
+            if canonical.hasPrefix("SH:") { return "SH" }
+            if canonical.hasPrefix("SZ:") { return "SZ" }
+            return "STOCK"
+        }
     }
 
     private func showToast(_ message: String) {
@@ -2917,8 +3099,8 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         let font = appFont(ofSize: 11, weight: .semibold)
         let color = NSColor.white.withAlphaComponent(0.56)
         let style = NSMutableParagraphStyle()
-        style.alignment = leadingTextAlignment
-        label.alignment = leadingTextAlignment
+        style.alignment = .right
+        label.alignment = .right
         label.attributedStringValue = mixedAttributedString(
             L10n.refreshState(isRefreshing: isRefreshing, countdown: countdown),
             baseFont: font,
@@ -2937,6 +3119,110 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
 
     private func isSearchResultTracked(_ result: AssetSearchResult) -> Bool {
         assets.contains { $0.id == result.id }
+    }
+
+    private func makeAssetPriceLine(_ asset: DisplayAsset) -> NSView {
+        let row = NSView()
+        row.widthAnchor.constraint(equalToConstant: rightColumnWidth).isActive = true
+        row.heightAnchor.constraint(equalToConstant: 18).isActive = true
+
+        let warning = makeQuoteTimeWarning(asset)
+        warning.translatesAutoresizingMaskIntoConstraints = false
+        warning.widthAnchor.constraint(equalToConstant: 12).isActive = true
+
+        let change = makeChangePercentTag(asset)
+
+        let price = makeLabel(asset.priceText, font: appFont(ofSize: 15, weight: .bold), color: valueColor(for: asset), alignment: .right)
+        price.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let valueGroup = NSStackView()
+        valueGroup.orientation = .horizontal
+        valueGroup.alignment = .centerY
+        valueGroup.spacing = 6
+        valueGroup.translatesAutoresizingMaskIntoConstraints = false
+        if isRTL {
+            valueGroup.addArrangedSubview(price)
+            valueGroup.addArrangedSubview(change)
+        } else {
+            valueGroup.addArrangedSubview(change)
+            valueGroup.addArrangedSubview(price)
+        }
+
+        row.addSubview(warning)
+        row.addSubview(valueGroup)
+        if isRTL {
+            NSLayoutConstraint.activate([
+                valueGroup.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+                valueGroup.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+                valueGroup.trailingAnchor.constraint(lessThanOrEqualTo: warning.leadingAnchor, constant: -4),
+                warning.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+                warning.centerYAnchor.constraint(equalTo: row.centerYAnchor)
+            ])
+        } else {
+            NSLayoutConstraint.activate([
+                warning.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+                warning.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+                valueGroup.leadingAnchor.constraint(greaterThanOrEqualTo: warning.trailingAnchor, constant: 4),
+                valueGroup.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+                valueGroup.centerYAnchor.constraint(equalTo: row.centerYAnchor)
+            ])
+        }
+        return row
+    }
+
+    private func makeChangePercentTag(_ asset: DisplayAsset) -> NSView {
+        let container = NSView()
+        container.wantsLayer = true
+        container.layer?.backgroundColor = valueColor(for: asset).withAlphaComponent(0.16).cgColor
+        container.layer?.cornerRadius = 3
+        container.heightAnchor.constraint(equalToConstant: 15).isActive = true
+
+        let label = makeLabel(formatPercent(asset.changePercent), font: appFont(ofSize: 9, weight: .bold), color: valueColor(for: asset), alignment: .center)
+        container.widthAnchor.constraint(equalToConstant: max(38, ceil(label.intrinsicContentSize.width) + 8)).isActive = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 4),
+            label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -4),
+            label.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+        ])
+
+        return container
+    }
+
+    private func makeQuoteTimeWarning(_ asset: DisplayAsset) -> NSTextField {
+        let warningText = quoteTimeWarningText(for: asset)
+        let label = makeLabel(warningText == nil ? "" : "⚠️", font: appFont(ofSize: 10, weight: .semibold), color: NSColor.systemYellow, alignment: .center)
+        label.toolTip = warningText
+        return label
+    }
+
+    private func quoteTimeWarningText(for asset: DisplayAsset) -> String? {
+        guard asset.errorMessage == nil else { return nil }
+        guard let updatedAt = asset.updatedAt else {
+            return L10n.text("报价时间缺失", "Quote time is missing", zhHant: "報價時間缺失")
+        }
+
+        let now = Date()
+        if updatedAt.timeIntervalSince(now) > 300 {
+            return L10n.text(
+                "报价时间异常：\(dateFormatter.string(from: updatedAt))",
+                "Suspicious quote time: \(dateFormatter.string(from: updatedAt))",
+                zhHant: "報價時間異常：\(dateFormatter.string(from: updatedAt))"
+            )
+        }
+
+        let maxAge: TimeInterval = asset.type == .crypto ? 30 * 60 : 4 * 24 * 60 * 60
+        if now.timeIntervalSince(updatedAt) > maxAge {
+            return L10n.text(
+                "报价可能过旧：\(dateFormatter.string(from: updatedAt))",
+                "Quote may be stale: \(dateFormatter.string(from: updatedAt))",
+                zhHant: "報價可能過舊：\(dateFormatter.string(from: updatedAt))"
+            )
+        }
+
+        return nil
     }
 
     private func makeAssetDetailLabel(_ asset: DisplayAsset, percentText: String, dateText: String?, isError: Bool = false) -> NSTextField {
@@ -2986,6 +3272,38 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         return label
     }
 
+    private func makePositionDetailLabel(_ asset: DisplayAsset) -> NSTextField {
+        let font = appFont(ofSize: 11, weight: .medium)
+        let label = NSTextField(labelWithString: "")
+        label.font = font
+        label.alignment = trailingTextAlignment
+        label.lineBreakMode = .byTruncatingTail
+        label.maximumNumberOfLines = 1
+        label.widthAnchor.constraint(equalToConstant: rightColumnWidth).isActive = true
+
+        let style = NSMutableParagraphStyle()
+        style.alignment = trailingTextAlignment
+
+        label.attributedStringValue = mixedAttributedString(
+            positionDetailText(for: asset),
+            baseFont: font,
+            asciiFont: senFont(ofSize: font.pointSize),
+            color: positionColor(for: asset),
+            paragraphStyle: style
+        )
+        return label
+    }
+
+    private func positionDetailText(for asset: DisplayAsset) -> String {
+        guard let amount = asset.positionProfitAmount,
+              let percent = asset.positionProfitPercent,
+              let marketValue = asset.positionMarketValue,
+              let currency = asset.currency else {
+            return "--"
+        }
+        return "\(L10n.marketValue) \(formatCurrencyWithCode(marketValue, currencyCode: currency, compact: true)) · \(formatPercent(percent)) · \(formatSignedCurrencyWithCode(amount, currencyCode: currency, compact: true))"
+    }
+
     private func makeLabel(_ text: String, font: NSFont, color: NSColor, alignment: NSTextAlignment = .left) -> NSTextField {
         let label = NSTextField(labelWithString: text)
         label.font = font
@@ -3008,9 +3326,20 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     private func valueColor(for asset: DisplayAsset) -> NSColor {
         priceColor(for: asset, mode: colorMode, whiteAlpha: 1, errorAlpha: 0.58)
     }
+
+    private func positionColor(for asset: DisplayAsset) -> NSColor {
+        priceColor(for: asset.positionProfitPercent, mode: colorMode, whiteAlpha: 1)
+    }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+    private enum PositionEditResult {
+        case save(quantity: Double, averageBuyPrice: Double)
+        case clear
+        case cancel
+        case invalid
+    }
+
     private var statusItem: NSStatusItem?
     private let tickerView = StatusTickerView()
     private let popover = NSPopover()
@@ -3090,6 +3419,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         panelViewController.onMoveAsset = { [weak self] sourceID, targetID, placeAfterTarget in
             self?.moveAsset(id: sourceID, to: targetID, placeAfterTarget: placeAfterTarget)
+        }
+        panelViewController.onEditPosition = { [weak self] id in
+            self?.editPosition(id: id)
         }
         panelViewController.onColorModeChange = { [weak self] mode in
             self?.setPriceColorMode(mode)
@@ -3335,6 +3667,104 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         assets.removeAll { $0.id == id }
         ConfigStore.write(config)
         updateViews()
+    }
+
+    private func editPosition(id: String) {
+        guard let configIndex = config.assets.firstIndex(where: { key(for: $0) == id }),
+              config.assets[configIndex].type == .stock else {
+            return
+        }
+
+        let result = showPositionEditor(for: config.assets[configIndex])
+        switch result {
+        case let .save(quantity, averageBuyPrice):
+            setPosition(id: id, quantity: quantity, averageBuyPrice: averageBuyPrice)
+        case .clear:
+            setPosition(id: id, quantity: nil, averageBuyPrice: nil)
+        case .invalid:
+            showMessageAlert(message: L10n.invalidPositionInput())
+        case .cancel:
+            break
+        }
+    }
+
+    private func setPosition(id: String, quantity: Double?, averageBuyPrice: Double?) {
+        guard let configIndex = config.assets.firstIndex(where: { key(for: $0) == id }) else { return }
+
+        config.assets[configIndex].holdingQuantity = quantity
+        config.assets[configIndex].averageBuyPrice = averageBuyPrice
+        ConfigStore.write(config)
+
+        if let assetIndex = assets.firstIndex(where: { $0.id == id }) {
+            assets[assetIndex].holdingQuantity = quantity
+            assets[assetIndex].averageBuyPrice = averageBuyPrice
+        }
+
+        updateViews()
+    }
+
+    private func showPositionEditor(for asset: TrackedAsset) -> PositionEditResult {
+        let alert = NSAlert()
+        alert.messageText = L10n.editPositionTitle(asset.name)
+        alert.informativeText = asset.symbol
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: L10n.save)
+        alert.addButton(withTitle: L10n.clear)
+        alert.addButton(withTitle: L10n.cancel)
+
+        let quantityField = NSTextField(string: asset.holdingQuantity.map(positionInputText) ?? "")
+        quantityField.placeholderString = L10n.quantity
+        let averageField = NSTextField(string: asset.averageBuyPrice.map(positionInputText) ?? "")
+        averageField.placeholderString = L10n.averageBuyPrice
+
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 8
+        stack.frame = NSRect(x: 0, y: 0, width: 260, height: 62)
+        stack.addArrangedSubview(makePositionInputRow(label: L10n.quantity, field: quantityField))
+        stack.addArrangedSubview(makePositionInputRow(label: L10n.averageBuyPrice, field: averageField))
+        alert.accessoryView = stack
+
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            return .clear
+        }
+        if response != .alertFirstButtonReturn {
+            return .cancel
+        }
+
+        guard let quantity = parsePositiveDecimal(quantityField.stringValue),
+              let averageBuyPrice = parsePositiveDecimal(averageField.stringValue) else {
+            return .invalid
+        }
+        return .save(quantity: quantity, averageBuyPrice: averageBuyPrice)
+    }
+
+    private func makePositionInputRow(label title: String, field: NSTextField) -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 8
+        row.widthAnchor.constraint(equalToConstant: 260).isActive = true
+
+        let label = NSTextField(labelWithString: title)
+        label.font = appFont(ofSize: 12, weight: .medium)
+        label.widthAnchor.constraint(equalToConstant: 92).isActive = true
+
+        field.font = senFont(ofSize: 12)
+        field.widthAnchor.constraint(equalToConstant: 160).isActive = true
+        row.addArrangedSubview(label)
+        row.addArrangedSubview(field)
+        return row
+    }
+
+    private func showMessageAlert(message: String) {
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     private func moveAsset(id sourceID: String, to targetID: String, placeAfterTarget: Bool) {
@@ -3614,6 +4044,20 @@ private func formatStatusNumber(_ value: Double, minFraction: Int, maxFraction: 
     formatNumber(value, minFraction: minFraction, maxFraction: maxFraction, usesGroupingSeparator: false)
 }
 
+private func positionInputText(_ value: Double) -> String {
+    formatNumber(value, minFraction: 0, maxFraction: 6, usesGroupingSeparator: false)
+}
+
+private func parsePositiveDecimal(_ string: String) -> Double? {
+    let normalized = string
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .replacingOccurrences(of: ",", with: "")
+    guard let value = Double(normalized), value > 0 else {
+        return nil
+    }
+    return value
+}
+
 private func formatCompact(_ value: Double) -> String {
     let absolute = abs(value)
     if absolute >= 1_000_000 {
@@ -3623,7 +4067,7 @@ private func formatCompact(_ value: Double) -> String {
         return "\(formatNumber(value / 1_000, minFraction: 1, maxFraction: 1))K"
     }
     if absolute >= 1_000 {
-        return formatNumber(value, minFraction: 0, maxFraction: 0)
+        return "\(formatNumber(value / 1_000, minFraction: 1, maxFraction: 1))K"
     }
     if absolute >= 100 {
         return formatNumber(value, minFraction: 0, maxFraction: 1)
@@ -3645,6 +4089,33 @@ private func formatCurrency(_ value: Double, currencyCode: String, compact: Bool
         return "\(number) \(currencyCode.uppercased())"
     }
     return "\(symbol)\(number)"
+}
+
+private func formatCurrencyWithCode(_ value: Double, currencyCode: String, compact: Bool) -> String {
+    let number = compact
+        ? formatCompact(value)
+        : formatNumber(value, minFraction: 2, maxFraction: 2)
+    return "\(number) \(currencyCode.uppercased())"
+}
+
+private func formatSignedCurrency(_ value: Double, currencyCode: String, compact: Bool = false) -> String {
+    let sign = value > 0 ? "+" : value < 0 ? "-" : ""
+    let symbol = currencySymbol(for: currencyCode)
+    let number = compact
+        ? formatCompact(abs(value))
+        : formatNumber(abs(value), minFraction: 2, maxFraction: 2)
+    if symbol.isEmpty {
+        return "\(sign)\(number) \(currencyCode.uppercased())"
+    }
+    return "\(sign)\(symbol)\(number)"
+}
+
+private func formatSignedCurrencyWithCode(_ value: Double, currencyCode: String, compact: Bool = false) -> String {
+    let sign = value > 0 ? "+" : value < 0 ? "-" : ""
+    let number = compact
+        ? formatCompact(abs(value))
+        : formatNumber(abs(value), minFraction: 2, maxFraction: 2)
+    return "\(sign)\(number) \(currencyCode.uppercased())"
 }
 
 private func currencySymbol(for currencyCode: String) -> String {
@@ -3697,8 +4168,12 @@ private func priceColor(for asset: DisplayAsset, mode: PriceColorMode, whiteAlph
         return NSColor.white.withAlphaComponent(errorAlpha)
     }
 
+    return priceColor(for: asset.changePercent, mode: mode, whiteAlpha: whiteAlpha)
+}
+
+private func priceColor(for percent: Double?, mode: PriceColorMode, whiteAlpha: CGFloat) -> NSColor {
     let white = NSColor.white.withAlphaComponent(whiteAlpha)
-    guard let percent = asset.changePercent, percent != 0 else {
+    guard let percent, percent != 0 else {
         return white
     }
 
@@ -3791,12 +4266,16 @@ private func errorAsset(_ asset: TrackedAsset, source: String, message: String) 
         symbol: asset.symbol,
         canonicalSymbol: asset.canonicalSymbol,
         source: source,
+        currentPrice: nil,
+        currency: nil,
         menuPriceText: "--",
         priceText: "--",
         detailText: source,
         changeText: "--",
         changePercent: nil,
         updatedAt: nil,
+        holdingQuantity: asset.holdingQuantity,
+        averageBuyPrice: asset.averageBuyPrice,
         visibleInMenuBar: asset.visibleInMenuBar,
         errorMessage: message
     )
