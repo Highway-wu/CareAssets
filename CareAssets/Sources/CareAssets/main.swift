@@ -166,6 +166,7 @@ enum L10n {
     static var launchAtLoginFailed: String { text("开机启动设置失败。", "Failed to update launch at login.", zhHant: "開機啟動設定失敗。") }
     static var edit: String { text("编辑", "Edit", zhHant: "編輯", ja: "編集", ar: "تحرير", de: "Bearbeiten", fr: "Modifier", ko: "편집", ptPT: "Editar", es: "Editar") }
     static var doneEditing: String { text("完成编辑", "Done editing", zhHant: "完成編輯", ja: "編集完了", ar: "إنهاء التحرير", de: "Fertig", fr: "Terminer", ko: "편집 완료", ptPT: "Concluir edição", es: "Terminar edición") }
+    static var reorder: String { text("拖动排序", "Drag to reorder", zhHant: "拖曳排序", ja: "ドラッグして並べ替え", ar: "اسحب لإعادة الترتيب", de: "Zum Sortieren ziehen", fr: "Faire glisser pour réorganiser", ko: "드래그하여 순서 변경", ptPT: "Arrastar para reordenar", es: "Arrastrar para reordenar") }
     static var position: String { text("持仓", "Position", zhHant: "持倉", ja: "保有", ar: "المركز", de: "Position", fr: "Position", ko: "보유", ptPT: "Posição", es: "Posición") }
     static var quantity: String { text("持仓数量", "Quantity", zhHant: "持倉數量", ja: "数量", ar: "الكمية", de: "Menge", fr: "Quantité", ko: "수량", ptPT: "Quantidade", es: "Cantidad") }
     static var averageBuyPrice: String { text("平均买入价", "Average buy price", zhHant: "平均買入價", ja: "平均取得単価", ar: "متوسط سعر الشراء", de: "Durchschnittskaufpreis", fr: "Prix moyen", ko: "평균 매수가", ptPT: "Preço médio", es: "Precio medio") }
@@ -2064,6 +2065,34 @@ final class FlippedDocumentView: NSView {
     }
 }
 
+final class ReorderHandleView: NSView {
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: 12, height: 18)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        NSColor.white.withAlphaComponent(0.62).setFill()
+
+        let diameter: CGFloat = 2.5
+        for xOffset in [-2.5, 2.5] as [CGFloat] {
+            for yOffset in [-4, 0, 4] as [CGFloat] {
+                let rect = NSRect(
+                    x: bounds.midX + xOffset - diameter / 2,
+                    y: bounds.midY + yOffset - diameter / 2,
+                    width: diameter,
+                    height: diameter
+                )
+                NSBezierPath(ovalIn: rect).fill()
+            }
+        }
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .openHand)
+    }
+}
+
 extension NSPasteboard.PasteboardType {
     static let careAssetsAssetID = NSPasteboard.PasteboardType("com.careassets.asset-id")
 }
@@ -2141,7 +2170,7 @@ final class AssetReorderRowView: NSStackView, NSDraggingSource {
 
         let draggingItem = NSDraggingItem(pasteboardWriter: pasteboardItem)
         draggingItem.setDraggingFrame(bounds, contents: draggingImage())
-        beginDraggingSession(with: [draggingItem], event: mouseDownEvent, source: self)
+        beginDraggingSession(with: [draggingItem], event: event, source: self)
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -2171,6 +2200,10 @@ final class AssetReorderRowView: NSStackView, NSDraggingSource {
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
         clearDropIndicator()
+    }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        allowsReordering && draggingSourceID(from: sender) != nil
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
@@ -2717,7 +2750,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         }
         row.orientation = .horizontal
         row.alignment = .centerY
-        row.spacing = 8
+        row.spacing = isEditingAssets ? 4.5 : 8
         row.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
         row.heightAnchor.constraint(equalToConstant: assetRowHeight).isActive = true
 
@@ -2771,9 +2804,10 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
 
         var rowViews: [NSView]
         if isEditingAssets {
+            let reorderHandle = makeReorderHandle()
             rowViews = isRTL
-                ? [makeRTLScrollerGutter(), visible, left, spacer, right]
-                : [visible, left, spacer, right]
+                ? [reorderHandle, makeRTLScrollerGutter(), visible, left, spacer, right]
+                : [reorderHandle, visible, left, spacer, right]
             if asset.type == .stock {
                 rowViews.append(position)
             }
@@ -2786,6 +2820,17 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         addArrangedSubviews(rowViews, to: row)
 
         return row
+    }
+
+    private func makeReorderHandle() -> ReorderHandleView {
+        let handle = ReorderHandleView()
+        handle.toolTip = L10n.reorder
+        handle.setAccessibilityElement(true)
+        handle.setAccessibilityRole(.image)
+        handle.setAccessibilityLabel(L10n.reorder)
+        handle.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        handle.heightAnchor.constraint(equalToConstant: 18).isActive = true
+        return handle
     }
 
     private func makeSearchHeader() -> NSView {
