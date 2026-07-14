@@ -2059,9 +2059,141 @@ final class StatusTickerView: NSView {
     }
 }
 
+private enum AssetDropIndicatorEdge {
+    case top
+    case bottom
+}
+
 final class FlippedDocumentView: NSView {
+    var dropIndicatorGap: CGFloat = 0
+
+    private weak var dropIndicatorOwner: NSView?
+    private weak var assetStackView: NSStackView?
+    private var onMoveAsset: ((String, String, Bool) -> Void)?
+    private var dropIndicatorRect: NSRect? {
+        didSet {
+            needsDisplay = true
+        }
+    }
+
     override var isFlipped: Bool {
         true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard let dropIndicatorRect else { return }
+
+        NSColor(calibratedRed: 0.45, green: 0.63, blue: 1.0, alpha: 0.95).setFill()
+        NSBezierPath(roundedRect: dropIndicatorRect, xRadius: 1, yRadius: 1).fill()
+    }
+
+    fileprivate func showDropIndicator(for row: AssetReorderRowView, edge: AssetDropIndicatorEdge) {
+        showDropIndicator(for: row, edge: edge, owner: row)
+    }
+
+    func configureGapDropDestination(
+        stackView: NSStackView,
+        isEnabled: Bool,
+        onMoveAsset: @escaping (String, String, Bool) -> Void
+    ) {
+        assetStackView = stackView
+        self.onMoveAsset = onMoveAsset
+        if isEnabled {
+            registerForDraggedTypes([.careAssetsAssetID])
+        } else {
+            unregisterDraggedTypes()
+        }
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        updateGapDropIndicator(sender) ? .move : []
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        updateGapDropIndicator(sender) ? .move : []
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        clearDropIndicator(ownedBy: self)
+    }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        gapDropTarget(for: sender) != nil
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        defer { clearDropIndicator(ownedBy: self) }
+        guard let sourceID = sender.draggingPasteboard.string(forType: .careAssetsAssetID),
+              let target = gapDropTarget(for: sender),
+              sourceID != target.assetID else {
+            return false
+        }
+
+        onMoveAsset?(sourceID, target.assetID, true)
+        return true
+    }
+
+    private func updateGapDropIndicator(_ sender: NSDraggingInfo) -> Bool {
+        guard sender.draggingPasteboard.string(forType: .careAssetsAssetID) != nil,
+              let target = gapDropTarget(for: sender) else {
+            clearDropIndicator(ownedBy: self)
+            return false
+        }
+
+        showDropIndicator(for: target, edge: .bottom, owner: self)
+        return true
+    }
+
+    private func gapDropTarget(for sender: NSDraggingInfo) -> AssetReorderRowView? {
+        let location = convert(sender.draggingLocation, from: nil)
+        return gapDropTarget(at: location)
+    }
+
+    fileprivate func gapDropTarget(at location: NSPoint) -> AssetReorderRowView? {
+        guard let assetStackView else { return nil }
+        let rows = assetStackView.arrangedSubviews.compactMap { $0 as? AssetReorderRowView }
+
+        for index in 0..<(max(rows.count - 1, 0)) {
+            let upperRow = rows[index]
+            let lowerRow = rows[index + 1]
+            let upperRect = upperRow.convert(upperRow.bounds, to: self)
+            let lowerRect = lowerRow.convert(lowerRow.bounds, to: self)
+            if location.y >= upperRect.maxY && location.y <= lowerRect.minY {
+                return upperRow
+            }
+        }
+        return nil
+    }
+
+    private func showDropIndicator(
+        for row: AssetReorderRowView,
+        edge: AssetDropIndicatorEdge,
+        owner: NSView
+    ) {
+        let lineHeight: CGFloat = 2
+        let rowRect = row.convert(row.bounds, to: self)
+        let boundaryY = edge == .top
+            ? rowRect.minY - dropIndicatorGap / 2
+            : rowRect.maxY + dropIndicatorGap / 2
+        let lineY = min(max(boundaryY - lineHeight / 2, bounds.minY), bounds.maxY - lineHeight)
+
+        dropIndicatorOwner = owner
+        dropIndicatorRect = NSRect(x: rowRect.minX, y: lineY, width: rowRect.width, height: lineHeight)
+    }
+
+    func clearDropIndicator(for row: AssetReorderRowView) {
+        clearDropIndicator(ownedBy: row)
+    }
+
+    private func clearDropIndicator(ownedBy owner: NSView) {
+        guard dropIndicatorOwner === owner else { return }
+        clearDropIndicator()
+    }
+
+    func clearDropIndicator() {
+        dropIndicatorOwner = nil
+        dropIndicatorRect = nil
     }
 }
 
@@ -2110,18 +2242,8 @@ final class AssetReorderRowView: NSStackView, NSDraggingSource {
     }
     var onMoveAsset: ((String, String, Bool) -> Void)?
 
-    private enum DropIndicatorPosition {
-        case top
-        case bottom
-    }
-
     private var mouseDownEvent: NSEvent?
     private var didBeginDrag = false
-    private var dropIndicatorPosition: DropIndicatorPosition? {
-        didSet {
-            needsDisplay = true
-        }
-    }
 
     init(assetID: String) {
         self.assetID = assetID
@@ -2131,17 +2253,6 @@ final class AssetReorderRowView: NSStackView, NSDraggingSource {
 
     required init?(coder: NSCoder) {
         nil
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        guard let dropIndicatorPosition else { return }
-
-        let lineHeight: CGFloat = 2
-        let y = dropIndicatorPosition == .top ? bounds.maxY - lineHeight : bounds.minY
-        let rect = NSRect(x: 0, y: y, width: bounds.width, height: lineHeight)
-        NSColor(calibratedRed: 0.45, green: 0.63, blue: 1.0, alpha: 0.95).setFill()
-        NSBezierPath(roundedRect: rect, xRadius: 1, yRadius: 1).fill()
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -2227,6 +2338,10 @@ final class AssetReorderRowView: NSStackView, NSDraggingSource {
         true
     }
 
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        dropIndicatorDocument?.clearDropIndicator()
+    }
+
     private func isButtonHit(_ hit: NSView) -> Bool {
         var node: NSView? = hit
         while let current = node, current !== self {
@@ -2254,11 +2369,23 @@ final class AssetReorderRowView: NSStackView, NSDraggingSource {
 
     private func updateDropIndicator(_ sender: NSDraggingInfo) {
         let location = convert(sender.draggingLocation, from: nil)
-        dropIndicatorPosition = location.y < bounds.midY ? .bottom : .top
+        let edge: AssetDropIndicatorEdge = location.y < bounds.midY ? .bottom : .top
+        dropIndicatorDocument?.showDropIndicator(for: self, edge: edge)
     }
 
     private func clearDropIndicator() {
-        dropIndicatorPosition = nil
+        dropIndicatorDocument?.clearDropIndicator(for: self)
+    }
+
+    private var dropIndicatorDocument: FlippedDocumentView? {
+        var ancestor = superview
+        while let view = ancestor {
+            if let document = view as? FlippedDocumentView {
+                return document
+            }
+            ancestor = view.superview
+        }
+        return nil
     }
 }
 
@@ -2711,6 +2838,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         scroll.heightAnchor.constraint(equalToConstant: listHeight).isActive = true
 
         let document = FlippedDocumentView(frame: NSRect(x: 0, y: 0, width: scrollWidth, height: documentHeight))
+        document.dropIndicatorGap = listRowGap
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = contentAlignment
@@ -2734,6 +2862,10 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
             for asset in assets {
                 stack.addArrangedSubview(makeAssetRow(asset))
             }
+        }
+
+        document.configureGapDropDestination(stackView: stack, isEnabled: isEditingAssets) { [weak self] sourceID, targetID, placeAfterTarget in
+            self?.onMoveAsset?(sourceID, targetID, placeAfterTarget)
         }
 
         scroll.documentView = document
