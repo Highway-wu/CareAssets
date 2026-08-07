@@ -173,6 +173,8 @@ enum L10n {
     static var clear: String { text("清空", "Clear", zhHant: "清空", ja: "クリア", ar: "مسح", de: "Leeren", fr: "Effacer", ko: "비우기", ptPT: "Limpar", es: "Limpiar") }
     static var unrealizedProfit: String { text("浮盈", "Unrealized gain", zhHant: "浮盈", ja: "含み益", ar: "ربح غير محقق", de: "Buchgewinn", fr: "Gain latent", ko: "평가이익", ptPT: "Ganho não realizado", es: "Ganancia no realizada") }
     static var unrealizedLoss: String { text("浮亏", "Unrealized loss", zhHant: "浮虧", ja: "含み損", ar: "خسارة غير محققة", de: "Buchverlust", fr: "Perte latente", ko: "평가손실", ptPT: "Perda não realizada", es: "Pérdida no realizada") }
+    static var profitLoss: String { text("盈亏", "P/L", zhHant: "盈虧", ja: "損益", ar: "الربح/الخسارة", de: "G/V", fr: "P/L", ko: "손익", ptPT: "G/P", es: "G/P") }
+    static var cost: String { text("成本", "Cost", zhHant: "成本", ja: "取得額", ar: "التكلفة", de: "Kosten", fr: "Coût", ko: "원가", ptPT: "Custo", es: "Coste") }
     static var marketValue: String { text("市值", "Value", zhHant: "市值", ja: "評価額", ar: "القيمة", de: "Wert", fr: "Valeur", ko: "평가액", ptPT: "Valor", es: "Valor") }
     static var colorSetting: String { text("价格颜色", "Price color", zhHant: "價格顏色", ja: "価格色", ar: "لون السعر", de: "Preisfarbe", fr: "Couleur prix", ko: "가격 색상", ptPT: "Cor preço", es: "Color precio") }
     static var languageSetting: String { text("语言", "Language", zhHant: "語言", ja: "言語", ar: "اللغة", de: "Sprache", fr: "Langue", ko: "언어", ptPT: "Idioma", es: "Idioma") }
@@ -523,6 +525,12 @@ struct DisplayAsset: Sendable {
     var positionMarketValue: Double? {
         guard let currentPrice, let holdingQuantity, holdingQuantity > 0 else { return nil }
         return currentPrice * holdingQuantity
+    }
+
+    var positionCost: Double? {
+        guard let holdingQuantity, let averageBuyPrice,
+              holdingQuantity > 0, averageBuyPrice > 0 else { return nil }
+        return holdingQuantity * averageBuyPrice
     }
 
     var hasPosition: Bool {
@@ -2670,6 +2678,7 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     private let stackSpacing: CGFloat = 10
     private let footerExtraTopSpacing: CGFloat = 6
     private let rtlScrollerGutterWidth: CGFloat = 10
+    private let percentTagWidth: CGFloat = 46
     private var rightColumnWidth: CGFloat { isEditingAssets ? 206 : 220 }
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -3047,6 +3056,10 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     }
 
     private func makeAssetRow(_ asset: DisplayAsset) -> NSView {
+        if !isEditingAssets {
+            return makeNormalAssetRow(asset)
+        }
+
         let row = AssetReorderRowView(assetID: asset.id)
         row.allowsReordering = isEditingAssets
         row.onMoveAsset = { [weak self] sourceID, targetID, placeAfterTarget in
@@ -3130,31 +3143,100 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
         return row
     }
 
+    private func makeNormalAssetRow(_ asset: DisplayAsset) -> NSView {
+        let row = AssetReorderRowView(assetID: asset.id)
+        row.allowsReordering = false
+        if asset.type == .stock, stockChartPeriod != .off {
+            row.onClick = { [weak self] in
+                self?.toggleStockChart(assetID: asset.id)
+            }
+        }
+        row.orientation = .vertical
+        row.alignment = contentAlignment
+        row.spacing = 2
+        row.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+        row.heightAnchor.constraint(equalToConstant: assetRowHeight).isActive = true
+
+        let top = NSStackView()
+        top.orientation = .horizontal
+        top.alignment = .centerY
+        top.spacing = 6
+        top.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+
+        let name = makeLabel(displayName(for: asset), font: appFont(ofSize: 14, weight: .bold), color: .white, alignment: leadingTextAlignment)
+        name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let warning = makeQuoteTimeWarning(asset)
+        warning.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        let price = makeLabel(asset.priceText, font: appFont(ofSize: 15, weight: .bold), color: valueColor(for: asset), alignment: .right)
+        price.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let priceTag = makeChangePercentTag(asset)
+        addArrangedSubviews([name, spacer, warning, price, priceTag], to: top)
+
+        let bottom = NSStackView()
+        bottom.orientation = .horizontal
+        bottom.alignment = .centerY
+        bottom.spacing = 6
+        bottom.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+        let code = makeAssetCodeLine(asset)
+        code.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let bottomSpacer = NSView()
+        bottomSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        var bottomViews: [NSView] = [code, bottomSpacer]
+
+        if asset.errorMessage != nil {
+            bottomViews.append(makeAssetDetailLabel(asset, percentText: asset.errorMessage ?? "", dateText: nil, isError: true))
+        } else if asset.hasPosition {
+            let summary = makePositionSummaryLabel(asset)
+            summary.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            bottomViews.append(summary)
+            bottomViews.append(makePositionPercentTag(asset))
+        }
+        addArrangedSubviews(bottomViews, to: bottom)
+
+        row.addArrangedSubview(top)
+        row.addArrangedSubview(bottom)
+        return row
+    }
+
     private func makeStockChartArea(_ asset: DisplayAsset) -> NSView {
         let container = NSView()
         container.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
         container.heightAnchor.constraint(equalToConstant: stockChartHeight).isActive = true
 
         let state = stockChartStates[asset.id] ?? (stockDataSource == .tencent ? .unavailable : .loading)
+        let chartContent = NSStackView()
+        chartContent.orientation = .vertical
+        chartContent.alignment = contentAlignment
+        chartContent.spacing = 2
+        chartContent.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(chartContent)
+        NSLayoutConstraint.activate([
+            chartContent.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
+            chartContent.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
+            chartContent.topAnchor.constraint(equalTo: container.topAnchor),
+            chartContent.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -4)
+        ])
+
+        if let formula = makePositionFormulaLabel(asset) {
+            chartContent.addArrangedSubview(formula)
+        }
+
         switch state {
         case let .loaded(points):
             let chart = StockChartView()
             chart.points = points
             chart.colorMode = colorMode
-            chart.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(chart)
-            NSLayoutConstraint.activate([
-                chart.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-                chart.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-                chart.topAnchor.constraint(equalTo: container.topAnchor),
-                chart.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -4)
-            ])
+            chart.widthAnchor.constraint(equalToConstant: contentWidth - 16).isActive = true
+            chart.heightAnchor.constraint(greaterThanOrEqualToConstant: asset.hasPosition ? 78 : 96).isActive = true
+            chartContent.addArrangedSubview(chart)
         case .loading:
-            addCenteredChartMessage(L10n.stockChartLoading, to: container)
+            addCenteredChartMessage(L10n.stockChartLoading, to: chartContent)
         case .unavailable:
-            addCenteredChartMessage(L10n.stockChartNoData, to: container)
+            addCenteredChartMessage(L10n.stockChartNoData, to: chartContent)
         case .failed:
-            addCenteredChartMessage(L10n.stockChartLoadFailed, to: container)
+            addCenteredChartMessage(L10n.stockChartLoadFailed, to: chartContent)
         }
         return container
     }
@@ -3908,8 +3990,8 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
             valueGroup.addArrangedSubview(price)
             valueGroup.addArrangedSubview(change)
         } else {
-            valueGroup.addArrangedSubview(change)
             valueGroup.addArrangedSubview(price)
+            valueGroup.addArrangedSubview(change)
         }
 
         row.addSubview(warning)
@@ -3935,14 +4017,22 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
     }
 
     private func makeChangePercentTag(_ asset: DisplayAsset) -> NSView {
+        makePercentTag(formatPercent(asset.changePercent), color: valueColor(for: asset))
+    }
+
+    private func makePositionPercentTag(_ asset: DisplayAsset) -> NSView {
+        makePercentTag(formatPercent(asset.positionProfitPercent), color: positionColor(for: asset))
+    }
+
+    private func makePercentTag(_ text: String, color: NSColor) -> NSView {
         let container = NSView()
         container.wantsLayer = true
-        container.layer?.backgroundColor = valueColor(for: asset).withAlphaComponent(0.16).cgColor
+        container.layer?.backgroundColor = color.withAlphaComponent(0.16).cgColor
         container.layer?.cornerRadius = 3
         container.heightAnchor.constraint(equalToConstant: 15).isActive = true
 
-        let label = makeLabel(formatPercent(asset.changePercent), font: appFont(ofSize: 9, weight: .bold), color: valueColor(for: asset), alignment: .center)
-        container.widthAnchor.constraint(equalToConstant: max(38, ceil(label.intrinsicContentSize.width) + 8)).isActive = true
+        let label = makeLabel(text, font: appFont(ofSize: 9, weight: .bold), color: color, alignment: .center)
+        container.widthAnchor.constraint(equalToConstant: percentTagWidth).isActive = true
         label.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(label)
 
@@ -4055,6 +4145,53 @@ final class AssetPanelViewController: NSViewController, NSTextFieldDelegate {
             color: positionColor(for: asset),
             paragraphStyle: style
         )
+        return label
+    }
+
+    private func makePositionSummaryLabel(_ asset: DisplayAsset) -> NSTextField {
+        let label = makeLabel(
+            positionSummaryText(for: asset),
+            font: appFont(ofSize: 11, weight: .medium),
+            color: positionColor(for: asset),
+            alignment: trailingTextAlignment
+        )
+        label.lineBreakMode = .byTruncatingHead
+        label.maximumNumberOfLines = 1
+        return label
+    }
+
+    private func positionSummaryText(for asset: DisplayAsset) -> String {
+        guard let amount = asset.positionProfitAmount,
+              let marketValue = asset.positionMarketValue,
+              let quantity = asset.holdingQuantity,
+              let currency = asset.currency else {
+            return "--"
+        }
+        let quantityText = formatNumber(quantity, minFraction: 0, maxFraction: 4)
+        let positionText = L10n.text(
+            "\(L10n.position) \(quantityText) 股",
+            "\(L10n.position) \(quantityText) shares",
+            zhHant: "\(L10n.position) \(quantityText) 股"
+        )
+        return "\(positionText) · \(L10n.marketValue) \(formatCurrencyWithCode(marketValue, currencyCode: currency, compact: true)) · \(L10n.profitLoss) \(formatSignedCurrencyWithCode(amount, currencyCode: currency, compact: true))"
+    }
+
+    private func makePositionFormulaLabel(_ asset: DisplayAsset) -> NSTextField? {
+        guard let amount = asset.positionProfitAmount,
+              let marketValue = asset.positionMarketValue,
+              let cost = asset.positionCost,
+              let currency = asset.currency else {
+            return nil
+        }
+        let text = L10n.text(
+            "\(L10n.marketValue) \(formatCurrencyWithCode(marketValue, currencyCode: currency, compact: false)) − \(L10n.cost) \(formatCurrencyWithCode(cost, currencyCode: currency, compact: false)) = \(formatSignedCurrencyWithCode(amount, currencyCode: currency, compact: false))",
+            "\(L10n.marketValue) \(formatCurrencyWithCode(marketValue, currencyCode: currency, compact: false)) − \(L10n.cost) \(formatCurrencyWithCode(cost, currencyCode: currency, compact: false)) = \(formatSignedCurrencyWithCode(amount, currencyCode: currency, compact: false))",
+            zhHant: "\(L10n.marketValue) \(formatCurrencyWithCode(marketValue, currencyCode: currency, compact: false)) − \(L10n.cost) \(formatCurrencyWithCode(cost, currencyCode: currency, compact: false)) = \(formatSignedCurrencyWithCode(amount, currencyCode: currency, compact: false))"
+        )
+        let label = makeLabel(text, font: appFont(ofSize: 10, weight: .medium), color: NSColor.white.withAlphaComponent(0.62), alignment: trailingTextAlignment)
+        label.lineBreakMode = .byTruncatingHead
+        label.maximumNumberOfLines = 1
+        label.widthAnchor.constraint(equalToConstant: contentWidth - 16).isActive = true
         return label
     }
 
