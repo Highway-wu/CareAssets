@@ -567,18 +567,19 @@ private struct CMBGoldRateItem: Decodable {
     var variety: String?
     var curPrice: String?
     var preClose: String?
+    var upDown: String?
     var time: String?
     var goldNo: String?
 }
 
-private struct ChineseGoldCloseReference {
-    var close: Double
-    var updatedAt: Date?
-}
+private let maximumChineseGoldQuoteAge: TimeInterval = 4 * 24 * 60 * 60
 
 extension AssetService {
     private func fetchGold(_ asset: TrackedAsset) async -> DisplayAsset {
         if L10n.usesChineseMarketUnits {
+            if let quote = await fetchCMBChineseGold(asset) {
+                return quote
+            }
             if let quote = await fetchK780ChineseGold(asset) {
                 return quote
             }
@@ -602,17 +603,17 @@ extension AssetService {
                 return nil
             }
 
+            let updatedAt = parseLocalDateTime(quote.uptime)
+            guard isFreshChineseGoldQuote(updatedAt) else {
+                return nil
+            }
+
             let directPrevious = positiveDouble(quote.yesyPrice)
             var changeAmount = meaningfulChange(quote.changePrice)
-            var previous = directPrevious ?? changeAmount.map { price - $0 }.flatMap { $0 > 0 ? $0 : nil }
+            let previous = directPrevious ?? changeAmount.map { price - $0 }.flatMap { $0 > 0 ? $0 : nil }
             var percent = meaningfulPercent(quote.changeMargin) ?? previous.flatMap { previousPrice -> Double? in
                 guard previousPrice != 0 else { return nil }
                 return (price - previousPrice) / previousPrice * 100.0
-            }
-            if previous == nil || percent == nil {
-                if let closeReference = try? await fetchChineseGoldCloseReference() {
-                    previous = previous ?? closeReference.close
-                }
             }
             if changeAmount == nil, let previous {
                 changeAmount = price - previous
@@ -638,7 +639,7 @@ extension AssetService {
                 detailText: detail,
                 changeText: formatChange(amount: changeAmount, percent: percent, currencyPrefix: "¥"),
                 changePercent: percent,
-                updatedAt: parseLocalDateTime(quote.uptime),
+                updatedAt: updatedAt,
                 visibleInMenuBar: asset.visibleInMenuBar,
                 errorMessage: nil
             )
@@ -647,19 +648,50 @@ extension AssetService {
         }
     }
 
-    private func fetchChineseGoldCloseReference() async throws -> ChineseGoldCloseReference? {
+    private func fetchCMBChineseGold(_ asset: TrackedAsset) async -> DisplayAsset? {
         let url = URL(string: "https://m.cmbchina.com/api/rate/gold?no=AUTD")!
-        let data = try await requestData(from: url)
-        let response = try JSONDecoder().decode(CMBGoldRateResponse.self, from: data)
-        guard let body = response.body, let items = body.data else { return nil }
-        let item = items.first { $0.goldNo?.uppercased() == "AUTD" } ?? items.first
-        guard let item, let close = positiveDouble(item.curPrice) else { return nil }
 
-        let datePrefix = body.time?.split(separator: " ").first.map(String.init)
-        let updatedAt = datePrefix.flatMap { date in
-            item.time.flatMap { parseLocalDateTime("\(date) \($0)") }
-        } ?? parseLocalDateTime(body.time)
-        return ChineseGoldCloseReference(close: close, updatedAt: updatedAt)
+        do {
+            let data = try await requestData(from: url)
+            let response = try JSONDecoder().decode(CMBGoldRateResponse.self, from: data)
+            guard let body = response.body, let items = body.data else { return nil }
+            let item = items.first { $0.goldNo?.uppercased() == "AUTD" } ?? items.first
+            guard let item, let price = positiveDouble(item.curPrice) else { return nil }
+
+            let datePrefix = body.time?.split(separator: " ").first.map(String.init)
+            let updatedAt = datePrefix.flatMap { date in
+                item.time.flatMap { parseLocalDateTime("\(date) \($0)") }
+            } ?? parseLocalDateTime(body.time)
+            guard isFreshChineseGoldQuote(updatedAt) else {
+                return nil
+            }
+
+            let previous = positiveDouble(item.preClose)
+            let changeAmount = previous.map { price - $0 } ?? meaningfulChange(item.upDown)
+            let percent = previous.flatMap { previousPrice -> Double? in
+                guard previousPrice != 0 else { return nil }
+                return (price - previousPrice) / previousPrice * 100.0
+            }
+            let detail = previous.map { "\(L10n.close) \(formatCNY($0, compact: false))\(L10n.gramSuffix)" } ?? (item.variety ?? L10n.cnyPerGram)
+
+            return DisplayAsset(
+                id: key(for: asset),
+                type: .gold,
+                name: asset.name,
+                symbol: asset.symbol,
+                source: "CMB Au(T+D)",
+                menuPriceText: formatStatusNumber(price, minFraction: 0, maxFraction: 0),
+                priceText: "\(formatCNY(price, compact: false))\(L10n.gramSuffix)",
+                detailText: detail,
+                changeText: formatChange(amount: changeAmount, percent: percent, currencyPrefix: "¥"),
+                changePercent: percent,
+                updatedAt: updatedAt,
+                visibleInMenuBar: asset.visibleInMenuBar,
+                errorMessage: nil
+            )
+        } catch {
+            return nil
+        }
     }
 
     private func fetchDerivedChineseGold(_ asset: TrackedAsset) async -> DisplayAsset {
@@ -3020,6 +3052,11 @@ private func positiveDouble(_ string: String?) -> Double? {
 private func meaningfulChange(_ string: String?) -> Double? {
     guard let value = string.flatMap(Double.init), abs(value) > 0.0001 else { return nil }
     return value
+}
+
+private func isFreshChineseGoldQuote(_ date: Date?) -> Bool {
+    guard let date else { return true }
+    return Date().timeIntervalSince(date) <= maximumChineseGoldQuoteAge
 }
 
 private func parseMillisecondsDate(_ string: String?) -> Date? {

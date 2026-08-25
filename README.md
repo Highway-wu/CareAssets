@@ -26,7 +26,7 @@ CareAssets 当前支持：
 
 - 币：来自 Coinbase Exchange 的交易对，例如 `BTC-USD`、`ETH-USD` 等。
 - 股票和 ETF：通过 Yahoo Finance 搜索和行情接口获取，覆盖美股、港股、A 股及其他 Yahoo Finance 支持的市场。
-- 国内黄金：中文市场展示人民币/克。
+- 国内黄金：中文市场展示人民币/克，优先使用招商银行 Au(T+D) 报价。
 - 海外黄金：展示美元/盎司。
 
 数据来自公开行情接口，可能因为源站调整、地区限制或频率限制而变化。CareAssets 只适合作为个人价格追踪工具，不构成任何投资建议。
@@ -112,7 +112,7 @@ CareAssets currently supports:
 
 - Crypto pairs from Coinbase Exchange, such as `BTC-USD`, `ETH-USD`, and other listed products.
 - Stocks and ETFs from Yahoo Finance search/chart endpoints, including US, Hong Kong, A-share, and other supported symbols.
-- Chinese gold price in CNY/gram through public gold quote endpoints.
+- Chinese gold price in CNY/gram, primarily from CMB Au(T+D) quotes.
 - International gold price through Yahoo Finance gold futures data.
 
 Data sources are public endpoints and may change or rate-limit without notice. CareAssets is a personal tracking utility, not financial advice.
