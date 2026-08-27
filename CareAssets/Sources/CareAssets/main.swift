@@ -154,7 +154,7 @@ enum L10n {
     static var searching: String { text("搜索中", "Searching", zhHant: "搜尋中", ja: "検索中", ar: "جارٍ البحث", de: "Sucht", fr: "Recherche", ko: "검색 중", ptPT: "A pesquisar", es: "Buscando") }
     static var cancel: String { text("取消", "Cancel", zhHant: "取消", ja: "取消", ar: "إلغاء", de: "Abbrechen", fr: "Annuler", ko: "취소", ptPT: "Cancelar", es: "Cancelar") }
     static var quit: String { text("退出", "Quit", zhHant: "結束", ja: "終了", ar: "إنهاء", de: "Beenden", fr: "Quitter", ko: "종료", ptPT: "Sair", es: "Salir") }
-    static var searchPlaceholder: String { text("搜索股票代码或者币的名称", "Search stock code or coin name", zhHant: "搜尋股票代碼或幣種名稱", ja: "株式コードまたはコイン名を検索", ar: "ابحث عن رمز سهم أو اسم عملة", de: "Aktiencode oder Coin suchen", fr: "Code action ou crypto", ko: "주식 코드 또는 코인명 검색", ptPT: "Código de ação ou moeda", es: "Código de acción o moneda") }
+    static var searchPlaceholder: String { text("搜索股票代码、币或黄金", "Search stock code, coin name, or gold", zhHant: "搜尋股票代碼、幣種或黃金", ja: "株式コード、コイン名、金を検索", ar: "ابحث عن سهم أو عملة أو ذهب", de: "Aktie, Coin oder Gold suchen", fr: "Action, crypto ou or", ko: "주식 코드, 코인명 또는 금 검색", ptPT: "Ação, moeda ou ouro", es: "Acción, moneda u oro") }
     static var emptySearchPrompt: String { text("请点击上方搜索框输入", "Click the search field above", zhHant: "請點擊上方搜尋框輸入", ja: "上の検索欄に入力してください", ar: "انقر حقل البحث أعلاه", de: "Oben ins Suchfeld klicken", fr: "Cliquez le champ ci-dessus", ko: "위 검색창을 클릭하세요", ptPT: "Clique no campo acima", es: "Haz clic en el campo superior") }
     static var noSearchResults: String { text("暂无结果，请换个关键词试试", "No results. Try another keyword.", zhHant: "暫無結果，請換個關鍵字試試", ja: "結果なし。別のキーワードを試してください", ar: "لا نتائج. جرّب كلمة أخرى.", de: "Keine Ergebnisse. Anderes Stichwort.", fr: "Aucun résultat. Essayez un autre mot.", ko: "결과 없음. 다른 키워드를 시도하세요.", ptPT: "Sem resultados. Tente outra palavra.", es: "Sin resultados. Prueba otra palabra.") }
     static var searchInProgress: String { text("搜索中...", "Searching...", zhHant: "搜尋中...", ja: "検索中...", ar: "جارٍ البحث...", de: "Suche...", fr: "Recherche...", ko: "검색 중...", ptPT: "A pesquisar...", es: "Buscando...") }
@@ -956,6 +956,7 @@ extension AssetService {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
+        let goldResults = searchGoldAssets(query: trimmed)
         var stockResults: [AssetSearchResult] = []
         var cryptoResults: [AssetSearchResult] = []
         var firstError: Error?
@@ -980,11 +981,45 @@ extension AssetService {
             }
         }
 
-        let uniqueResults = rankAssetSearchResults(uniqueAssetSearchResults(cryptoResults + stockResults), query: trimmed)
+        let uniqueResults = rankAssetSearchResults(uniqueAssetSearchResults(goldResults + cryptoResults + stockResults), query: trimmed)
         if uniqueResults.isEmpty, let firstError {
             throw firstError
         }
         return Array(uniqueResults.prefix(12))
+    }
+
+    private func searchGoldAssets(query: String) -> [AssetSearchResult] {
+        let normalizedQuery = normalizedSearchText(query)
+        guard !normalizedQuery.isEmpty else { return [] }
+
+        let searchFields = [
+            L10n.gold,
+            L10n.goldShort,
+            "黄金",
+            "黃金",
+            "gold",
+            "xau",
+            "xauusd",
+            "au",
+            "autd",
+            "au(t+d)",
+            "jdgold",
+            "jd_gold",
+            "cmb"
+        ]
+        let isMatch = searchFields
+            .map(normalizedSearchText)
+            .contains { searchFieldMatches($0, query: normalizedQuery) }
+        guard isMatch else { return [] }
+
+        return [
+            AssetSearchResult(
+                type: .gold,
+                name: L10n.gold,
+                symbol: "JD_GOLD",
+                source: "CMB Au(T+D)"
+            )
+        ]
     }
 
     private func fetchStockAssets(_ assets: [TrackedAsset]) async -> [String: DisplayAsset] {
